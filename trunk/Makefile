@@ -1,8 +1,8 @@
 #
-#-= HelloOS Educational Project =-
-#-===============================-
+# -= HelloOS Educational Project =-
+# -===============================-
 #
-#  Makefile
+#  $Id$
 #
 #  Основной makefile проекта
 #

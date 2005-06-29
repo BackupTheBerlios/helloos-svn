@@ -1,6 +1,9 @@
 
--= HelloOS Educational Project =-
--===============================-
+ -= HelloOS Educational Project =-
+ -===============================-
+
+  $Id$
+
 
 Использованная литература:
 

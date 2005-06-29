@@ -2,7 +2,7 @@
  * -= HelloOS Educational Project =-
  * -===============================-
  *
- *  scheduler.c
+ *  $Id$
  *
  *  Планировщик процессов
  *
