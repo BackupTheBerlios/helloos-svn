@@ -1,0 +1,417 @@
+
+Allocating common symbols
+Common symbol       size              file
+
+CurDir              0x4               fat.o
+curr_x              0x4               hello_stdio.o
+FirstRootDirSecNum  0x4               fat.o
+FirstDataSector     0x4               fat.o
+bpbSector           0x200             fat.o
+cols                0x4               hello_stdio.o
+Current             0x2               scheduler.o
+FATSz               0x4               fat.o
+fd_cache            0x1428            fd.o
+bpb                 0x4               fat.o
+fd_cache_pos        0x4               fd.o
+Type                0x1               fat.o
+DataSec             0x4               fat.o
+TotSec              0x4               fat.o
+CountofClusters     0x4               fat.o
+curr_y              0x4               hello_stdio.o
+TaskPool            0x3800            scheduler.o
+RootDirSectors      0x4               fat.o
+vidport             0x4               hello_stdio.o
+Task                0x200             scheduler.o
+lines               0x4               hello_stdio.o
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+*default*        0x0000000000000000 0xffffffffffffffff
+
+Linker script and memory map
+
+Address of section .text set to 0x1000
+LOAD head.o
+LOAD start.o
+LOAD scheduler.o
+LOAD fd.o
+LOAD panic.o
+LOAD hello_stdio.o
+LOAD hello_string.o
+LOAD fat.o
+                0x0000000008048000                PROVIDE (__executable_start, 0x8048000)
+                0x0000000008048000                . = (0x8048000 + SIZEOF_HEADERS)
+
+.interp
+ *(.interp)
+
+.hash
+ *(.hash)
+
+.dynsym
+ *(.dynsym)
+
+.dynstr
+ *(.dynstr)
+
+.gnu.version
+ *(.gnu.version)
+
+.gnu.version_d
+ *(.gnu.version_d)
+
+.gnu.version_r
+ *(.gnu.version_r)
+
+.rel.dyn
+ *(.rel.init)
+ *(.rel.text .rel.text.* .rel.gnu.linkonce.t.*)
+ *(.rel.fini)
+ *(.rel.rodata .rel.rodata.* .rel.gnu.linkonce.r.*)
+ *(.rel.data .rel.data.* .rel.gnu.linkonce.d.*)
+ *(.rel.tdata .rel.tdata.* .rel.gnu.linkonce.td.*)
+ *(.rel.tbss .rel.tbss.* .rel.gnu.linkonce.tb.*)
+ *(.rel.ctors)
+ *(.rel.dtors)
+ *(.rel.got)
+ *(.rel.bss .rel.bss.* .rel.gnu.linkonce.b.*)
+
+.rela.dyn
+ *(.rela.init)
+ *(.rela.text .rela.text.* .rela.gnu.linkonce.t.*)
+ *(.rela.fini)
+ *(.rela.rodata .rela.rodata.* .rela.gnu.linkonce.r.*)
+ *(.rela.data .rela.data.* .rela.gnu.linkonce.d.*)
+ *(.rela.tdata .rela.tdata.* .rela.gnu.linkonce.td.*)
+ *(.rela.tbss .rela.tbss.* .rela.gnu.linkonce.tb.*)
+ *(.rela.ctors)
+ *(.rela.dtors)
+ *(.rela.got)
+ *(.rela.bss .rela.bss.* .rela.gnu.linkonce.b.*)
+
+.rel.plt
+ *(.rel.plt)
+
+.rela.plt
+ *(.rela.plt)
+
+.init
+ *(.init)
+
+.plt
+ *(.plt)
+
+.text           0x0000000000001000     0x25b8
+ *(.text .stub .text.* .gnu.linkonce.t.*)
+ .text          0x0000000000001000      0x432 head.o
+                0x0000000000001000                startup_32
+                0x00000000000012b2                irq0_int
+                0x00000000000012fa                ii_tss
+                0x00000000000013ca                irq1_tss
+                0x00000000000012ce                irq1_int
+                0x00000000000012a8                ignore_int
+                0x0000000000001362                irq0_tss
+ *fill*         0x0000000000001432        0xe 90909090
+ .text          0x0000000000001440      0x32b start.o
+                0x0000000000001490                command
+                0x0000000000001660                start_my_kernel
+                0x0000000000001440                make_sound
+                0x0000000000001460                LoadFileCallback
+ *fill*         0x000000000000176b        0x5 90909090
+ .text          0x0000000000001770      0x29d scheduler.o
+                0x00000000000017c0                scheduler_dbg
+                0x00000000000019d0                scheduler
+                0x0000000000001770                init_scheduler
+ *fill*         0x0000000000001a0d        0x3 90909090
+ .text          0x0000000000001a10      0x669 fd.o
+                0x0000000000001dc0                fd_read_sector
+                0x0000000000001a70                in_FIFO
+                0x0000000000001a90                fd_clear_int_flag
+                0x0000000000001a50                out_FIFO
+                0x0000000000001b90                fd_write_sector_real
+                0x0000000000001aa0                fd_wait_for_int
+                0x0000000000001a10                fd_wait_for_RQM
+                0x0000000000001a30                out_DOR
+                0x0000000000001b40                fd_write_sector
+                0x0000000000001ac0                fd_init
+                0x0000000000001e50                fd_read_sector_real
+ *fill*         0x0000000000002079        0x7 90909090
+ .text          0x0000000000002080       0x1e panic.o
+                0x0000000000002080                panic
+ *fill*         0x000000000000209e        0x2 90909090
+ .text          0x00000000000020a0      0x758 hello_stdio.o
+                0x0000000000002380                PrintHex
+                0x0000000000002300                nputs
+                0x00000000000020a0                scrio_init
+                0x00000000000022c0                puts_color
+                0x0000000000002400                readline
+                0x00000000000022e0                puts
+                0x0000000000002190                scroll
+                0x0000000000002110                gotoxy
+                0x0000000000002200                nputs_color
+                0x0000000000002320                clear_screen
+ *fill*         0x00000000000027f8        0x8 90909090
+ .text          0x0000000000002800       0xec hello_string.o
+                0x0000000000002800                memcpy
+                0x0000000000002870                strncmp
+                0x0000000000002830                strcmp
+                0x00000000000028d0                strlen
+ *fill*         0x00000000000028ec        0x4 90909090
+ .text          0x00000000000028f0      0xcc8 fat.o
+                0x0000000000003060                PrintFile
+                0x0000000000002b30                GetEntryCluster
+                0x0000000000002970                GetNextCluster
+                0x0000000000002d60                ListDirCallback
+                0x00000000000032b0                FindEntry
+                0x0000000000003080                CharTo83
+                0x0000000000002eb0                FileIterate
+                0x0000000000003110                Make83Name
+                0x00000000000032e0                fat_init
+                0x0000000000003250                FindEntryCallback
+                0x0000000000002cb0                RootDirIterate
+                0x0000000000002ae0                IsBad
+                0x0000000000003010                PrintFileCallback
+                0x0000000000002a90                IsEOC
+                0x00000000000034d0                fat_main
+                0x0000000000002b50                DirIterate
+                0x0000000000002940                ClusterToSector
+                0x00000000000028f0                LoadSectorsFromDisk
+                0x0000000000002e90                ListDir
+ *(.gnu.warning)
+
+.fini
+ *(.fini)
+                0x00000000000035b8                PROVIDE (__etext, .)
+                0x00000000000035b8                PROVIDE (_etext, .)
+                0x00000000000035b8                PROVIDE (etext, .)
+
+.rodata         0x00000000000035c0      0x3c6
+ *(.rodata .rodata.* .gnu.linkonce.r.*)
+ .rodata.str1.1
+                0x00000000000035c0      0x115 start.o
+ .rodata.str1.1
+                0x00000000000036d5       0x14 scheduler.o
+ .rodata.str1.1
+                0x00000000000036e9       0x5c fd.o
+ .rodata.str1.1
+                0x0000000000003745       0x16 panic.o
+ .rodata.str1.1
+                0x000000000000375b       0x5c hello_stdio.o
+ *fill*         0x00000000000037b7        0x1 00
+ .rodata        0x00000000000037b8       0xe8 hello_stdio.o
+ .rodata.str1.1
+                0x00000000000038a0       0xbf fat.o
+ *fill*         0x000000000000395f        0x1 00
+ .rodata.str1.32
+                0x0000000000003960       0x26 fat.o
+
+.rodata1
+ *(.rodata1)
+
+.eh_frame_hdr
+ *(.eh_frame_hdr)
+
+.eh_frame
+ *(.eh_frame)
+
+.gcc_except_table
+ *(.gcc_except_table)
+                0x0000000000003986                . = (ALIGN (0x1000) - ((0x1000 - .) & 0xfff))
+                0x0000000000004000                . = (0x1000 DATA_SEGMENT_ALIGN 0x1000)
+                0x0000000000004000                . = ALIGN (0x4)
+                0x0000000000004000                PROVIDE (__preinit_array_start, .)
+
+.preinit_array
+ *(.preinit_array)
+                0x0000000000004000                PROVIDE (__preinit_array_end, .)
+                0x0000000000004000                PROVIDE (__init_array_start, .)
+
+.init_array
+ *(.init_array)
+                0x0000000000004000                PROVIDE (__init_array_end, .)
+                0x0000000000004000                PROVIDE (__fini_array_start, .)
+
+.fini_array
+ *(.fini_array)
+                0x0000000000004000                PROVIDE (__fini_array_end, .)
+
+.data           0x0000000000004000       0x1c
+ *(.data .data.* .gnu.linkonce.d.*)
+ .data          0x0000000000004000        0x8 start.o
+                0x0000000000004000                LoadAddress
+                0x0000000000004004                curaddr
+ .data          0x0000000000004008       0x14 hello_stdio.o
+                0x0000000000004008                vidmem
+
+.data1
+ *(.data1)
+
+.tdata
+ *(.tdata .tdata.* .gnu.linkonce.td.*)
+
+.tbss
+ *(.tbss .tbss.* .gnu.linkonce.tb.*)
+ *(.tcommon)
+
+.eh_frame
+ *(.eh_frame)
+
+.gcc_except_table
+ *(.gcc_except_table)
+
+.dynamic
+ *(.dynamic)
+
+.ctors
+ *crtbegin*.o(.ctors)
+ *(EXCLUDE_FILE(*crtend*.o) .ctors)
+ *(SORT(.ctors.*))
+ *(.ctors)
+
+.dtors
+ *crtbegin*.o(.dtors)
+ *(EXCLUDE_FILE(*crtend*.o) .dtors)
+ *(SORT(.dtors.*))
+ *(.dtors)
+
+.jcr
+ *(.jcr)
+
+.got
+ *(.got.plt)
+ *(.got)
+                0x000000000000401c                _edata = .
+                0x000000000000401c                PROVIDE (edata, .)
+                0x000000000000401c                __bss_start = .
+
+.bss            0x0000000000004020     0x6f1c
+ *(.dynbss)
+ *(.bss .bss.* .gnu.linkonce.b.*)
+ .bss           0x0000000000004020       0x64 start.o
+ .bss           0x0000000000004084        0x2 scheduler.o
+                0x0000000000004084                NTasks
+ *fill*         0x0000000000004086        0x2 00
+ .bss           0x0000000000004088        0x1 fd.o
+                0x0000000000004088                __FD_INT_FLAG
+ *fill*         0x0000000000004089        0x3 00
+ *fill*         0x000000000000408c       0x14 00
+ .bss           0x00000000000040a0     0x1e00 fat.o
+ *(COMMON)
+ COMMON         0x0000000000005ea0     0x3a20 scheduler.o
+                                          0x0 (size before relaxing)
+                0x0000000000005ea0                Current
+                0x0000000000005ec0                TaskPool
+                0x00000000000096c0                Task
+ COMMON         0x00000000000098c0     0x142c fd.o
+                                          0x0 (size before relaxing)
+                0x00000000000098c0                fd_cache
+                0x000000000000ace8                fd_cache_pos
+ COMMON         0x000000000000acec       0x14 hello_stdio.o
+                                          0x0 (size before relaxing)
+                0x000000000000acec                curr_x
+                0x000000000000acf0                cols
+                0x000000000000acf4                curr_y
+                0x000000000000acf8                vidport
+                0x000000000000acfc                lines
+ COMMON         0x000000000000ad00      0x23c fat.o
+                                          0x0 (size before relaxing)
+                0x000000000000ad00                CurDir
+                0x000000000000ad04                FirstRootDirSecNum
+                0x000000000000ad08                FirstDataSector
+                0x000000000000ad20                bpbSector
+                0x000000000000af20                FATSz
+                0x000000000000af24                bpb
+                0x000000000000af28                Type
+                0x000000000000af2c                DataSec
+                0x000000000000af30                TotSec
+                0x000000000000af34                CountofClusters
+                0x000000000000af38                RootDirSectors
+                0x000000000000af3c                . = ALIGN (0x4)
+                0x000000000000af3c                . = ALIGN (0x4)
+                0x000000000000af3c                _end = .
+                0x000000000000af3c                PROVIDE (end, .)
+                0x000000000000af3c                . = DATA_SEGMENT_END (.)
+
+.stab
+ *(.stab)
+
+.stabstr
+ *(.stabstr)
+
+.stab.excl
+ *(.stab.excl)
+
+.stab.exclstr
+ *(.stab.exclstr)
+
+.stab.index
+ *(.stab.index)
+
+.stab.indexstr
+ *(.stab.indexstr)
+
+.comment        0x0000000000000000      0x165
+ *(.comment)
+ .comment       0x0000000000000000       0x33 start.o
+ .comment       0x0000000000000033       0x33 scheduler.o
+ .comment       0x0000000000000066       0x33 fd.o
+ .comment       0x0000000000000099       0x33 panic.o
+ .comment       0x00000000000000cc       0x33 hello_stdio.o
+ .comment       0x00000000000000ff       0x33 hello_string.o
+ .comment       0x0000000000000132       0x33 fat.o
+
+.debug
+ *(.debug)
+
+.line
+ *(.line)
+
+.debug_srcinfo
+ *(.debug_srcinfo)
+
+.debug_sfnames
+ *(.debug_sfnames)
+
+.debug_aranges
+ *(.debug_aranges)
+
+.debug_pubnames
+ *(.debug_pubnames)
+
+.debug_info
+ *(.debug_info .gnu.linkonce.wi.*)
+
+.debug_abbrev
+ *(.debug_abbrev)
+
+.debug_line
+ *(.debug_line)
+
+.debug_frame
+ *(.debug_frame)
+
+.debug_str
+ *(.debug_str)
+
+.debug_loc
+ *(.debug_loc)
+
+.debug_macinfo
+ *(.debug_macinfo)
+
+.debug_weaknames
+ *(.debug_weaknames)
+
+.debug_funcnames
+ *(.debug_funcnames)
+
+.debug_typenames
+ *(.debug_typenames)
+
+.debug_varnames
+ *(.debug_varnames)
+
+/DISCARD/
+ *(.note.GNU-stack)
+OUTPUT(hello binary)
