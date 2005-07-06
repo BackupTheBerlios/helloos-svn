@@ -13,8 +13,8 @@
 config_interface: textconfig
 display_library: x
 megs: 128
-romimage: file="/home/ily/os/bochs-20041110/bios/BIOS-bochs-latest", address=0xf0000
-vgaromimage: file="/home/ily/os/bochs-20041110/bios/VGABIOS-lgpl-latest"
+romimage: file="/home/ily/os/tools/bochs-20041110/bios/BIOS-bochs-latest", address=0xf0000
+vgaromimage: file="/home/ily/os/tools/bochs-20041110/bios/VGABIOS-lgpl-latest"
 boot: floppy
 floppya: 1_44="Image.fd", status=inserted
 # no floppyb

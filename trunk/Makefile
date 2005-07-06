@@ -80,7 +80,7 @@ bintest.bin: bintest.S
 
 
 clean:
-	rm -rf *.{i,s,o} *.bin hello Image.fd Image *~
+	rm -rf *.{i,s,o} *.bin hello Image.fd Image map.txt *~
 
 
 new: clean all

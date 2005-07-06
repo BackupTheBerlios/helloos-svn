@@ -18,18 +18,13 @@
 .global startup_32
 
 
-// Сегмент данных ядра. Используем второй
-// сегмент в GDT (см. boot.S)
-#define __KERNEL_DS  0x10
-
-
 startup_32:
 
 // Иницилизация. Запрещаем прерывания и заполняем
 // сегментные регистры.
 cld
 cli
-movl $(__KERNEL_DS),%eax
+movl $0x10, %eax
 mov %ax, %ds
 mov %ax, %es
 mov %ax, %fs
@@ -38,14 +33,13 @@ mov %ax, %ss
 mov $0x10000, %esp
 
 // Убеждаемся, что A20 включилась
-xorl %eax, %eax
-1: incl %eax
-   movl %eax, 0x000000
-   cmpl %eax, 0x100000
-   je 1b    /* Если нет - ждем пока не включится сама ;) */
+//xorl %eax, %eax
+//1: incl %eax
+//   movl %eax, 0x000000
+//   cmpl %eax, 0x100000
+//   je 1b    /* Если нет - ждем пока не включится сама ;) */
 
 // Чистим флаги
-mov $0x10000, %esp
 pushl $0
 popfl
 

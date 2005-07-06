@@ -31,6 +31,9 @@ void nputs(const char *s, uint n);
 // Вывод строки с аттрибутом
 void puts_color(const char *s, uchar attr);
 
+// Вывод строки с аттрибутом, не более n символов
+void nputs_color(const char *s, uint n, uchar attr);
+
 // Перемещение курсора
 void gotoxy(int x, int y);
 

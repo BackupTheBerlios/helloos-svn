@@ -15,6 +15,7 @@
 
 #include "io.h"
 #include "types.h"
+#include "version.h"
 #include "panic.h"
 #include "fd.h"
 #include "hello_stdio.h"
@@ -107,6 +108,13 @@ void command(char *cmd)
       panic("As you wish!");
       return;
    }
+   if (strcmp(cmd, "reboot") == 0)
+   {
+      // Я пока не нашел в документации почему это приводит к перезагрузке
+      // На самом деле даже одна любая из этих команд вызывает перезагрузку
+      outb(0xfe, 0x64);
+      outb(0x01, 0x92);
+   }
    if (strcmp(cmd, "fat") == 0)
    {
       fat_main();
@@ -128,6 +136,11 @@ void command(char *cmd)
       __asm__("sti");
       return;
    }
+   if (strcmp(cmd, "beep") == 0)
+   {
+      make_sound(); // Выключить его невозможно ;)
+      return;
+   }
    puts("Unknown command\n");
 }
 
@@ -147,17 +160,27 @@ int start_my_kernel()
    puts_color("woow!\n", 0x0c);
    puts("Ok, now starting the "); puts_color("kernel", 0x09); puts(".\n");
    puts("\n");
-   puts_color("HelloOS", 0x0a); puts(" v0.0.1 by ");
+   puts_color("HelloOS ", 0x0a);
+   // FIXME: Здесь нужен Денисовский printf. Но мне сейчас лень его вписывать. Сейчас предполагается, что цифры в версии <10.
+   nputs("v", 1);
+   char ver_tmp = VER_MAJOR + 0x30;
+   nputs_color(&ver_tmp, 1, 0x09); nputs_color(".", 1, 0x09);
+   ver_tmp = VER_MINOR + 0x30;
+   nputs_color(&ver_tmp, 1, 0x09);
+   ver_tmp = VER_ALPHA;
+   nputs_color(&ver_tmp, 1, 0x09);
+
+   puts(" by ");
    puts_color("Denis Zgursky", 0x0d); puts(" and ");
    puts_color("Ilya Skriblovsky\n\n", 0x0b);
 
    puts("Starting FDC driver... ");
    fd_init();
-   puts("ok\n");
+   puts_color("ok\n", 0x0a);
 
    puts("Starting FAT driver... ");
    fat_init();
-   puts("ok\n");
+   puts_color("ok\n", 0x0a);
 
    puts("\nHello World!");
 
