@@ -14,6 +14,14 @@
  *    VER_APLHA = 'e'
  */
 
+
+#ifndef __VERSION_H
+#define __VERSION_H
+
+
 #define VER_MAJOR    0
 #define VER_MINOR    0
-#define VER_ALPHA    'a'
+#define VER_ALPHA    'b'
+
+
+#endif // __VERSION_H

@@ -10,11 +10,12 @@
  */
 
 
-#ifndef __HELLO_STDIO
-#define __HELLO_STDIO
+#ifndef __HELLO_STDIO_H
+#define __HELLO_STDIO_H
 
 
 #include "types.h"
+#include "hello_stdarg.h"
 
 extern int lines, cols;                // количество линий и строк на экране
 extern int curr_x,curr_y;              // текущее положение курсора
@@ -46,11 +47,19 @@ void clear_screen();
 // Вывод байтов в hex-виде. Size - размер данных в байтах.
 void PrintHex(void *val, uchar size);
 
-// Считать один символ
-char get_char();
-
 // Считать строку с выводом введенного на экран
 void readline(char *s, uint buf_size);
 
+// Реализация стандартного vsnprintf'а. За подробностями см. hello_stdio.c 
+int vsnprintf(char *str, size_t maxlen, const char *format, va_list curp);
 
-#endif // __HELLO_STDIO
+// Реализация стандартного snprintf'а. За подробностями см. hello_stdio.c
+int snprintf(char *str, size_t maxlen, const char *format, ...);
+
+// Реализация стандартного printf'а. За подробностями см. hello_stdio.c
+int printf(char *format, ...);
+
+// Цветной printf
+int printf_color(uchar attr, char *format, ...);
+
+#endif // __HELLO_STDIO_H

@@ -20,6 +20,7 @@ typedef unsigned char   uchar;
 typedef unsigned short  ushort;
 typedef unsigned int    uint;
 typedef unsigned int    ulong;
+typedef unsigned int    size_t;
 typedef uchar bool;
 
 

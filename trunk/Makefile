@@ -19,7 +19,7 @@
 #    в комментариях к файлу boot.S)
 #
 #  image: создает минимальный образ дискеты с системой.
-#    Создается файл Image.fd с образом чистой дискеты,
+#    Создается файл image с образом чистой дискеты,
 #    с записанным загрузчиком. На этот образ копируется
 #    ядро.
 #
@@ -80,7 +80,7 @@ bintest.bin: bintest.S
 
 
 clean:
-	rm -rf *.{i,s,o} *.bin hello Image.fd Image map.txt *~
+	rm -rf *.{i,s,o} *.bin hello image map.txt *~
 
 
 new: clean all
@@ -95,14 +95,15 @@ install: all
 
 
 image: all
-	dd if=/dev/zero of=Image.fd bs=512 count=2880
-	dd if=boot.bin of=Image.fd bs=512 count=1 conv=notrunc
-	mcopy -i Image.fd hello bintest.bin ::
+	dd if=/dev/zero of=image bs=512 count=2880
+	chmod +x image
+	dd if=boot.bin of=image bs=512 count=1 conv=notrunc
+	mcopy -i image hello bintest.bin ::
 
 
 emu: image
 	bochs -qf emulate.txt
 
 qemu: image
-	qemu -fda Image.fd
+	qemu -fda image
 

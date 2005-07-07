@@ -1,0 +1,85 @@
+
+ -= HelloOS Educational Project =-
+ -===============================-
+
+  $Id$
+
+
+COMPILING HelloOS
+
+   In order to compile HelloOS you will need following tools:
+      * Make
+         Actually, you *can* compile without it, by
+         your own /dev/hands.
+
+      * GCC C-compiler
+         Some parts of the code (especially inline asm) are
+         gcc-specific and probably wont to compile with other
+         tools. If you are able to compile HelloOS without gcc
+         please let me know!
+
+      * dev86 package (as86 and ld86)
+         Bootsector if written with as86 assembler. I think it
+         wont to compile with other assembler.
+
+      To compile both the bootsector and the kernel just type:
+         $ make
+      In result you'll receive three files: "boot.bin", "hello"
+      and "bintest.bin". "boot.bin" is the bootsector for
+      FAT12-floppy. "hello" is the kernel and "bintest.bin" is
+      test binary for 'bin' console command.
+
+
+INSTALLING
+
+      To make bootable floppy image type:
+         $ make image
+      You will receive file 'image' with floppy image.
+      To install HelloOS on floppy, insert floppy into /dev/fd0
+      and type:
+         $ make install
+      (this command suggests that /mnt/floppy is a mount point
+      for /dev/fd0)
+      Your files on this floppy will NOT be erased, but it is
+      a risk to destroy the filesystem if this floppy is not
+      standard DOS-formatted one. See comments in boot.S (in
+      russian ;)).
+
+WWW
+      Visit our site: http://helloos.berlios.de and HelloOS's
+      project page on http://developer.berlios.de/projects/helloos.
+      There you can find latest releases of HelloOS, bug tracking
+      system, get support and get latest testing sources snapshot
+      via Subversion (SVN).
+      
+
+FEATURES
+
+These commands are supported in the console:
+   * clear     -  clears the screen (except the bottom line)
+
+   * bin       -  loads five copies of bintest.bin file from
+                  the floppy and creates five processes. Each
+                  process will blink with one symbol in bottom
+                  line of the screen. Another 'bin' command will
+                  create another five processes and so on.
+
+   * panic     -  invokes the System Panic ;)
+
+   * reboot    -  reboots the computer
+
+   * fat       -  invokes the simple FAT browser. It is no way
+                  to leave it.
+
+   * dbg       -  invokes the debugger when running under Bochs
+
+   * cli       -  disables interrupts (and stops all processes
+                  except the main one)
+
+   * sti       -  enables interrupts
+
+   * beep      -  invokes a beeeep with PC-speaker. It is no
+                  way to stop it.
+
+   * cpi       -  prints some information about your CPU
+
