@@ -22,126 +22,73 @@
 #include "hello_string.h"
 #include "fat.h"
 #include "scheduler.h"
+#include "aout.h"
 
 
 
-/*функция издающая долгий и протяжных звук. Использует только ввод/вывод в порты поэтому очень полезна для отладки*/
-
+// Издает бесконечный звук и может быть полезна для отладки
 void make_sound()
 {
-__asm__("                     \
-   movb    $0xB6, %al\n\t     \
-   outb    %al, $0x43\n\t     \
-   movb    $0x0D, %al\n\t     \
-   outb    %al, $0x42\n\t     \
-   movb    $0x11, %al\n\t     \
-   outb     %al, $0x42\n\t    \
-   inb     $0x61, %al\n\t     \
-   orb     $3, %al\n\t        \
-   outb    %al, $0x61\n\t     \
-");
+__asm__(
+   "movb    $0xb6, %al\n"
+   "outb    %al, $0x43\n"
+   "movb    $0x0d, %al\n"
+   "outb    %al, $0x42\n"
+   "movb    $0x11, %al\n"
+   "outb    %al, $0x42\n"
+   "inb     $0x61, %al\n"
+   "orb     $3, %al\n"
+   "outb    %al, $0x61\n");
 }
 
 
 
-uchar *LoadAddress = (uchar*) 0x50000;
-
-bool LoadFileCallback(uchar *Block, ulong len, void *Data)
-{
-   memcpy(LoadAddress, Block, len);
-   LoadAddress += len;
-
-   Data=Data;
-
-   return 1;
-}
-
-typedef void (*voidfunc)();
-
-
-uint dbg(uint addr, void *tss_addr);
-
-
-uint curaddr = 0x50000;
 void command(char *cmd)
 {
-   uint i;
-
-   printf("You say: %s\n", cmd);
-   if (strcmp(cmd, "clear") == 0)
+   if (strcmp(cmd, "clear") == 0)   // Очистить экран
    {
       clear_screen();
       return;
    }
-   if (strcmp(cmd, "bin") == 0)
-   {
-      // Загружаем 5 бинарников из файла bintest.bin, но не больше 25
-
-//      if (curbin >= 25)
-//      {
-//         puts("already\n");
-//         return;
-//      }
-
-      DirEntry Entry;
-      if (FindEntry(0, "BINTEST BIN", &Entry) != (uint)-1)
-      {
-         LoadAddress = (uchar*)curaddr;
-         FileIterate(&Entry, LoadFileCallback, 0);
-
-         scheduler_dbg(curaddr);
-         for (i = 0; i < 4; i++)
-         {
-            memcpy((void*)(curaddr+0x100), (void*)curaddr, 0x100);
-            scheduler_dbg(curaddr+0x100);
-            curaddr += 0x100;
-         }
-         curaddr += 0x100;
-      }
-      else puts("bintest.bin not found\n");
-
-
-      return;
-   }
-   if (strcmp(cmd, "panic") == 0)
+   if (strcmp(cmd, "panic") == 0)   // Напугать ядро
    {
       panic("As you wish!");
       return;
    }
-   if (strcmp(cmd, "reboot") == 0)
+   if (strcmp(cmd, "reboot") == 0)  // Перезагрузиться
    {
       // Я пока не нашел в документации почему это приводит к перезагрузке
       // На самом деле даже одна любая из этих команд вызывает перезагрузку
       outb(0xfe, 0x64);
       outb(0x01, 0x92);
    }
-   if (strcmp(cmd, "fat") == 0)
+   if (strcmp(cmd, "fat") == 0)     // Запустить FAT-браузер
    {
       fat_main();
       return;
    }
-   if (strcmp(cmd, "dbg") == 0)
+   if (strcmp(cmd, "dbg") == 0)     // Вызвать отладчик Bochs
    {
       outw(0x8A00, 0x8A00);
       outw(0x8AE0, 0x8A00);
       return;
    }
-   if (strcmp(cmd, "cli") == 0)
+   if (strcmp(cmd, "cli") == 0)     // Отключить прерывания, остановить процессы
    {
       __asm__("cli");
       return;
    }
-   if (strcmp(cmd, "sti") == 0)
+   if (strcmp(cmd, "sti") == 0)     // Включить прерывания
    {
       __asm__("sti");
       return;
    }
-   if (strcmp(cmd, "beep") == 0)
+   if (strcmp(cmd, "beep") == 0)    // Наступить на хвост
    {
-      make_sound(); // Выключить его невозможно ;)
+      make_sound();
       return;
    }
-   if (strcmp(cmd, "cpu") == 0)
+   if (strcmp(cmd, "cpu") == 0)     // Определить процессор
    {
       // Идентификация процессора (см. [1])
 
@@ -193,7 +140,7 @@ void command(char *cmd)
          case 3: puts(" (reserved?)"); break;
       }
 
-      // Наличие некоторых интересных фич
+      // Наличие некоторых нам интересных фич
       puts("\nOn-Chip FPU: ");
       if (!(edx & 0x1)) puts("NO"); else puts("YES");
       puts("\nDebugging Extensions: ");
@@ -210,14 +157,54 @@ void command(char *cmd)
       if (!(edx & 0x4000000)) puts("NO"); else puts("YES");
       return;
    }
+   if (strcmp(cmd, "ps") == 0)      // Показать всех
+   {
+      scheduler_ps();
+      return;
+   }
+   if (strncmp(cmd, "kill", 4) == 0)   // Убить процесс. pid задан параметром
+   {
+      uint i = 5, pid = 0, len = strlen(cmd);
+      while (i < len)
+      {
+         pid *= 10;
+         pid += cmd[i++] - '0';
+      }
+      printf("%d\n", pid);
+      scheduler_kill(pid);
+      return;
+   }
+   if (strncmp(cmd, "info", 4) == 0)   // Прочитать a.out-заголовки у файла, заданного параметром
+   {
+      aout_info(&cmd[5]);
+      return;
+   }
+   if (strncmp(cmd, "exe", 3) == 0)    // Запустить a.out-файл, заданный параметром
+   {
+      aout_load(&cmd[4]);
+      return;
+   }
+   if (strncmp(cmd, "pages", 5) == 0)  // Сколько занимает в памяти процесс. pid задан параметром
+   {
+      uint i = 6, pid = 0, len = strlen(cmd);
+      while (i < len)
+      {
+         pid *= 10;
+         pid += cmd[i++] - '0';
+      }
+      scheduler_pages(pid);
+      return;
+   }
+   if (strcmp(cmd, "gp") == 0)
+   {
+      *(uchar*)(0xc0000000) = 5;
+   }
    puts("Unknown command\n");
 }
 
 
 
-/*А вот и основная функция*/
-
-static char cmd[100];
+static char cmd[100];   // Буфер ввода
 
 int start_my_kernel()
 {
@@ -226,6 +213,7 @@ int start_my_kernel()
    scrio_init(*(uchar*)(0x8000+0x90000),
               *(uchar*)(0x8001+0x90000));
 
+   // Выводим всякую ерунду
    puts_color("woow!\n", 0x0c);
    puts("Ok, now starting the "); puts_color("kernel", 0x09); puts(".\n\n");
    puts_color("HelloOS ", 0x0a);
@@ -235,6 +223,8 @@ int start_my_kernel()
    puts_color("Denis Zgursky", 0x0d); puts(" and ");
    puts_color("Ilya Skriblovsky\n\n", 0x0b);
 
+
+   // Инициализируем компоненты
    puts("Starting FDC driver... ");
    fd_init();
    puts_color("ok\n", 0x0a);
@@ -243,16 +233,14 @@ int start_my_kernel()
    fat_init();
    puts_color("ok\n", 0x0a);
 
-   puts("\nHello World!");
+   puts("\nHello World!"); // Куда же без этого?!
 
+
+   // Имитируем консоль
    while (1)
    {
       puts("\n>>");
       readline(cmd, 100);
       command(cmd);
    }
-
-/*уходим в бесконечный цикл*/
-   make_sound();
-   while(1);
 }

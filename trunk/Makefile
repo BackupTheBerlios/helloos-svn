@@ -8,10 +8,18 @@
 #
 #  Описание основных целей:
 #
-#  all:   скомпилировать загрузчик и ядро
+#  all: скомпилировать загрузчик и ядро
 #    Загрузчик компилируется в файл boot.bin, а
 #    ядро в файл hello.
 #
+#  depend: генерирует зависимости и записывает
+#    их в файл depend, который включается в этот
+#    makefile. Эта цель вызывается из make all.
+#    При компиляции "с нуля" может возникнуть
+#    ошибка типа "depend: No such file", но тем
+#    не менее, компиляция должна продолжиться и
+#    завершиться успешно.
+# 
 #  clean: удалить все временные и бинарные файлы
 #
 #  install: записывает на дискету загрузчик и ядро,
@@ -31,56 +39,53 @@
 CFLAGS = -O2 -ffreestanding -W -Wall -save-temps
 # -Werror
 
+KERNEL_OBJS = head.o start.o scheduler.o fd.o panic.o hello_stdio.o hello_string.o fat.o pager.o syscall.o aout.o
 
-all: boot.bin hello bintest.bin
+
+all: boot.bin hello test.out gp.out
 
 boot.bin: boot.o
-	ld86 -d -s -o boot.bin boot.o
+	ld86 -d -s -o $@ $<
 
 boot.o: boot.S
-	as86 -0 -a -o boot.o boot.S
+	as86 -0 -a -o $@ $<
 
 
-hello: head.o start.o scheduler.o fd.o panic.o hello_stdio.o hello_string.o fat.o
-	ld -M -Ttext 0x1000 -e startup_32 --oformat=binary  head.o start.o scheduler.o fd.o panic.o hello_stdio.o hello_string.o fat.o -o hello >map.txt
+hello: $(KERNEL_OBJS)
+	ld -M -Ttext 0x5000 -e startup_32 --oformat=binary $(KERNEL_OBJS) -o $@ >map.txt
 
-head.o: head.S config.h
-	gcc -c head.S
 
-start.o: start.c io.h types.h config.h fat.h hello_stdio.h
-	gcc $(CFLAGS) -c start.c
+.c.o:
+	gcc $(CFLAGS) -c $<
 
-fd.o: fd.c fd.h io.h types.h config.h
-	gcc $(CFLAGS) -c fd.c
-
-panic.o: panic.c panic.h types.h config.h
-	gcc $(CFLAGS) -c panic.c
-
-hello_stdio.o: hello_stdio.c types.h config.h
-	gcc $(CFLAGS) -c hello_stdio.c
-
-hello_string.o: hello_string.c types.h config.h
-	gcc $(CFLAGS) -c hello_string.c
-
-fat.o: fat.c fat.h types.h fd.h config.h
-	gcc $(CFLAGS) -c fat.c
-
-scheduler.o: scheduler.c scheduler.h types.h panic.h config.h
-	gcc $(CFLAGS) -c scheduler.c
+.S.o:
+	gcc $(CFLAGS) -c $<
 
 
 
-#binload.o: binload.S
-#	gcc -c binload.S
+test.out: mymain.o test.o
+	i386-aout-ld -M -o $@ test.o mymain.o -e _main >map.aout.txt
 
-bintest.bin: bintest.S
-	gcc -c bintest.S
-	ld -Ttext 0x0000 -e start --oformat=binary bintest.o -o bintest.bin
+test.o: test.c
+	i386-aout-gcc -O0 -nostdlib -nostartfiles -c test.c -save-temps
 
+gp.out: mymain.o gp.o
+	i386-aout-ld -M -o $@ gp.o mymain.o -e _main >map.aout.txt
+
+gp.o: test.c
+	i386-aout-gcc -DINVOKE_GP -o $@ -O0 -nostdlib -nostartfiles -c test.c -save-temps
+
+mymain.o: mymain.c
+	i386-aout-gcc -c $<
+
+
+
+depend:
+	for i in *.[cS]; do gcc -M $$i; done >depend
 
 
 clean:
-	rm -rf *.{i,s,o} *.bin hello image map.txt *~
+	rm -rf *.{i,s,o} *.bin hello image map.*txt *~ depend *.out
 
 
 new: clean all
@@ -90,7 +95,8 @@ install: all
 	dd if=boot.bin of=/dev/fd0
 	mount /mnt/floppy
 	cp -f hello /mnt/floppy
-	cp -f bintest.bin /mnt/floppy
+	cp -f test.out /mnt/floppy
+	cp -f gp.out /mnt/floppy
 	umount /mnt/floppy
 
 
@@ -98,7 +104,7 @@ image: all
 	dd if=/dev/zero of=image bs=512 count=2880
 	chmod +x image
 	dd if=boot.bin of=image bs=512 count=1 conv=notrunc
-	mcopy -i image hello bintest.bin ::
+	mcopy -i image hello test.out gp.out ::
 
 
 emu: image
@@ -107,3 +113,4 @@ emu: image
 qemu: image
 	qemu -fda image
 
+include depend

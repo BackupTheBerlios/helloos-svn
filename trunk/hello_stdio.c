@@ -37,11 +37,18 @@ void scrio_init(int cur_x, int cur_y)
    curr_x = cur_x;
    curr_y = cur_y;
 
-   if (curr_y == 24)
-   {
-      scroll();
+//   if (curr_y == 24)
+//   {
+      int i;
+      for (i = 0; i < 24*80*2; i++)
+         vidmem[i] = vidmem[i+160];
+      for (i = 0; i < 160; i+=2)
+      {
+         vidmem[24*80*2+i  ] = 0x20;
+         vidmem[24*80*2+i+1] = 0x0a;
+      }
       curr_y--;
-   }
+//   }
    lines = 24;
 }
 
@@ -51,11 +58,11 @@ void scrio_init(int cur_x, int cur_y)
 void gotoxy(int x, int y)
 {
    int pos;
-   pos = (x + cols * y) * 2;
+   pos = x + cols * y;
    outb_p(14, vidport);
-   outb_p(0xff & (pos >> 9), vidport+1);
+   outb_p((pos >> 8) & 0xff, vidport+1);
    outb_p(15, vidport);
-   outb_p(0xff & (pos >> 1), vidport+1);
+   outb_p(pos & 0xff, vidport+1);
    curr_x = x;
    curr_y = y;
 }
@@ -65,10 +72,16 @@ void gotoxy(int x, int y)
 //Работает, используя прямую запись в видеопамять
 void scroll()
 {
-   int i;
-   memcpy(vidmem, vidmem + cols * 2, (lines - 1) * cols * 2);
-   for (i = (lines - 1) * cols * 2; i < lines * cols * 2; i += 2)
-      vidmem[i] = ' ';
+   __asm__ ("movl $0xb8000, %%edi\n"
+            "movl $0xb80a0, %%esi\n"
+            "movl $920, %%ecx\n"
+            "cld\n"
+            "rep movsl\n"
+            "movl $0x0e200e20, %%eax\n"
+            "movl $0xb8e60, %%edi\n"
+            "movl $40, %%ecx\n"
+            "rep stosl\n"
+            :::"di","si");
 }
 
 
@@ -90,6 +103,13 @@ void nputs_color(const char *s, uint n, uchar attr)
             scroll();
             y--;
          }
+      }
+      else if (c == '\t')
+      {
+         int t = 8 - (x % 8);
+         gotoxy(x,y);
+         nputs_color("        ", t, attr);
+         x=curr_x;y=curr_y;
       }
       else
       {
@@ -325,7 +345,7 @@ int vsnprintf(char *str, size_t maxlen, const char *format, va_list curp)
                j=28;
                while(strpos<=(maxlen-2) && j>=0)   // не 0 :(
                {
-                  if((ui>>j)&0xf)      // цифру делаем младшей и отделяем её
+                  if((ui>>j))      // цифру делаем младшей и отделяем её
                   {
                      str[strpos]=hexnum[(ui>>j)&0xf];
                      strpos++;

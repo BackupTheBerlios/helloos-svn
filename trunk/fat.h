@@ -112,5 +112,7 @@ void Make83Name(char *fullname, char *name83);
 // найденного файла/каталого
 ulong FindEntry(ulong DirCluster, char *Name83, DirEntry *EntryBuf);
 
+// Читает в буфер часть файла, len байт, начиная с байта номер start
+void LoadPart(DirEntry *Entry, void *Buf, uint start, uint len);
 
 #endif // __FAT_H

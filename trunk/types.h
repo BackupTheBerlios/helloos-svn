@@ -43,4 +43,9 @@ struct _GDTDescriptor
 } __attribute__((packed));
 
 
+
+#define MAX(a,b) ((a)>(b) ? (a) : (b))
+#define MIN(a,b) ((a)<(b) ? (a) : (b))
+
+
 #endif // __TYPES_H

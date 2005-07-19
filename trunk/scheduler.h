@@ -58,14 +58,15 @@ struct _TaskStruct
 {
    // TSS задачи
    TSSStruct tss;
-   // Дескриптор TSS-сегмента в GDT, *включая CPL и TI*. Т.е. чтобы получить
+   // Селектор TSS-сегмента в GDT, *включая CPL и TI*. Т.е. чтобы получить
    // номер сегмента, надо сделать tsss>>3.
    uint tsss;
 
-   // Соответствует ли этот контекст существующей задаче
-   bool live;
+   // Идентификатор
+   ulong pid;
 
-   // Пока тут больше ничего нет. FIXME: добавить полезную инфу
+   // Этот массив будет служить стеком для системных вызовов
+   uchar syscall_stack[1024];
 };
 
 
@@ -75,5 +76,14 @@ void init_scheduler();
 
 // Тупое создание процесса. Убрать на фиг.
 void scheduler_dbg(ulong addr);
+
+
+
+// ТЕСТОВЫЕ ФУНКЦИИ
+void scheduler_ps();
+void scheduler_kill(ulong pid);
+void scheduler_pages(ulong pid);
+
+
 
 #endif // __SCHEDULER_H

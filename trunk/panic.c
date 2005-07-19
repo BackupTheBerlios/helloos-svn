@@ -20,7 +20,8 @@
 
 void panic(char *msg)
 {
-   puts("\nKernel panic!\nOops: ");
-   puts(msg);
+   puts_color("\nKernel panic!\nOops: ", 0xc);
+   puts_color(msg, 0x0c);
    asm("cli; hlt");
+   while(1);
 }

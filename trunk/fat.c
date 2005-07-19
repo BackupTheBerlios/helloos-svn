@@ -334,6 +334,7 @@ bool ListDirCallback(DirEntry *Entry, void *Data)
 {
 //   printf("\"%.11s\"\t", Entry->Name);
    nputs(Entry->Name, 11);
+   puts(" ");
    if ((Entry->Attr & ATTR_LONG_NAME) == ATTR_LONG_NAME) puts("LFN ");
    else
    {
@@ -402,9 +403,6 @@ bool PrintFileCallback(uchar *Block, ulong len, void *Data)
 {
    ulong i;
    uchar s[] = {0, 0};
-//   PrintHex(&Block, 4); puts("\n");
-//   PrintHex(&len, 4);
-//   while(1);
    for (i = 0; i < len; i++)
    {
       s[0] = Block[i];
@@ -419,6 +417,47 @@ bool PrintFileCallback(uchar *Block, ulong len, void *Data)
 void PrintFile(DirEntry *Entry)
 {
    FileIterate(Entry, PrintFileCallback, 0);
+}
+
+
+typedef struct
+{
+   uint start, len;
+   uchar *Buf;
+
+   uint filepos;
+   uint bufpos;
+} LoadPartData;
+
+bool LoadPartCallback(uchar *Block, ulong len, LoadPartData *Data)
+{
+   if (Data->filepos >= Data->start + Data->len)
+      return 0;
+
+   if (Data->filepos + len >= Data->start)
+   {
+      uint s = (Data->start > Data->filepos) ? (Data->start - Data->filepos) : 0;
+      uint n = len - s;
+      if (n > Data->len-Data->bufpos) n = Data->len - Data->bufpos;
+      memcpy(&Data->Buf[Data->bufpos], &Block[s], n);
+      Data->bufpos += n;
+   }
+   
+
+   Data->filepos += len;
+   return 1;
+}
+
+void LoadPart(DirEntry *Entry, void *Buf, uint start, uint len)
+{
+   LoadPartData Data = {
+      .start = start,
+      .len = len,
+      .Buf = Buf,
+      .filepos = 0,
+      .bufpos = 0
+   };
+   FileIterate(Entry, (FileCallback)LoadPartCallback, (void*)&Data);
 }
 
 
@@ -574,9 +613,10 @@ void fat_init()
    else
       FirstRootDirSecNum = bpb->Tail32.RootClus;
 
-   if (Type == FAT12) puts("Hmm... this is FAT12... ");
-   if (Type == FAT16) puts("Hmm... this is FAT16... ");
-   if (Type == FAT32) puts("Hmm... this is FAT32... ");
+   puts("Hmm... this is FAT");
+   if (Type == FAT12) puts("12... ");
+   if (Type == FAT16) puts("16... ");
+   if (Type == FAT32) puts("32... ");
 }
 
 

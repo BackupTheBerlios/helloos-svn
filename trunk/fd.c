@@ -323,7 +323,7 @@ void fd_read_sector_real(uint lba, uchar *buf)
    // Буфер должен находиться в пределах первых 16 мегабайт!
    // Нужно будет выделить специальный системный буфер и копировать
    // из него в пользовательский буфер.
-   outb_p(0x46, 0x0b);  // 4a - запись
+   outb_p(0x46, 0x0b);  // 4a - чтение
    outb_p(0x46, 0x0c);  //
    outb_p((uint)(buf) & 0xff, 0x04);         //
    outb_p(((uint)(buf) >> 8 ) & 0xff, 0x04); // 24-битный адрес
@@ -333,7 +333,7 @@ void fd_read_sector_real(uint lba, uchar *buf)
    outb_p(0x02, 0x0a);
 
 
-   // Посылаем команду записи
+   // Посылаем команду чтения
    out_FIFO(0xc6);
    out_FIFO(head << 2);
    out_FIFO(cylinder);

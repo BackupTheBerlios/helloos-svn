@@ -6,10 +6,15 @@
  *
  *  Начало 32-битного ядра
  *
- *  Проверяет A20 и иницилизирует регистры для
- *  перехода на часть, написанную на C.
+ *  Производит всевозможные инициализации,
+ *  заполняет системные таблицы, содержит
+ *  код обработчиков прерываний и точку
+ *  входа ядра. Вообщем самый главный файл ;)
  *
  */
+
+
+#include "head.h"
 
 // Начинаем секцию кода
 .text
@@ -22,22 +27,15 @@ startup_32:
 
 // Иницилизация. Запрещаем прерывания и заполняем
 // сегментные регистры.
-cld
 cli
-movl $0x10, %eax
+movl $KERNEL_DS, %eax
 mov %ax, %ds
 mov %ax, %es
 mov %ax, %fs
 mov %ax, %gs
 mov %ax, %ss
-mov $0x10000, %esp
+mov $0x30000, %esp
 
-// Убеждаемся, что A20 включилась
-//xorl %eax, %eax
-//1: incl %eax
-//   movl %eax, 0x000000
-//   cmpl %eax, 0x100000
-//   je 1b    /* Если нет - ждем пока не включится сама ;) */
 
 // Чистим флаги
 pushl $0
@@ -45,20 +43,90 @@ popfl
 
 
 
-// Заполняем TSS главной задачи. См. комментарии в scheduler.c
-   mov $TaskPool, %edx
+// Устанавливаем страничную адресацию
+//
+// В двух словах, модель памяти выглядит так.
+// Каталог страниц находится в 0x0000. Две таблицы страниц (в 0x3000 и 0x4000)
+// маппируют первые физические 8Mb на линейное АП, начиная со второго Гб. Это
+// область ядра и процессам туда доступа нет. Нижние 2 Гб для каждого процесса
+// составляются индивидуально. Сейчас они также маппируют первые 8Мб физ. памяти - это
+// нужно главному процессу.
+// Все процессы пользуются одними и теми же сегментами кода и данных с DPL=3,
+// базой 0 и лимитом 2Gb, то есть им доступны только "их" страницы. Ядро и системные
+// вызовы пользуются сегментами с DPL=0, базой 2Gb и лимитом 2Gb, а так же сегментами
+// процессов для доступа к памяти процессов.
 
-   mov %esp, 4(%edx)
-   mov %ss, 8(%edx)
-   mov %esp, 56(%edx)
-   mov %ss, 80(%edx)
-   mov %ebp, 60(%edx)
-   mov %es, 72(%edx)
-   mov %cs, 76(%edx)
-   mov %ds, 84(%edx)
-   movw $0x10, 88(%edx)
-   movl $0x200, 36(%edx)
-   movl $start_my_kernel, 32(%edx)
+
+// Обнуляем каталог страниц
+   xorl %eax, %eax
+   movl $1024, %ecx
+   xorl %edi, %edi
+   cld
+   rep stosl
+
+// Устанавливаем ссылки на таблицы страниц
+   movl $0x1007, 0x0000
+   movl $0x2007, 0x0004
+   movl $0x3001, 0x0800
+   movl $0x4001, 0x0804
+
+// Заполняем страницы, отвечающие за линейные адреса 0x00000000 - 0x00800000
+   movl $0x7, %eax   // 7 - флаги: доступны с cpl=3, чтение/запись, присутствуют
+   movl $1024*2, %ecx   // Заполняем две таблицы страниц
+   cld
+1: // edi установлен раннее в 0x1000
+   stosl
+   addl $0x1000, %eax
+   loop 1b
+
+// Заполняем страницы, отвечающие за линейные адреса 0x80000000 - 0x80800000
+
+// FIXME: должно быть 0x1, но тогда qemu престает
+// работать. Наверное, это глюк в qemu.
+   movl $0x7, %eax   // 1 - флаги: доступны только ядру, только чтение
+   movl $1024*2, %ecx   // Заполняем две таблицы страниц
+   movl $0x3000, %edi
+   cld
+1:
+   stosl
+   addl $0x1000, %eax
+   loop 1b
+
+
+
+   xorl %eax, %eax   // Загружаем адрес
+   movl %eax, %cr3   //   каталога страниц
+
+   movl %cr0, %eax
+   orl $0x80000000, %eax   // Включаем страничную адресацию
+   movl %eax, %cr0
+
+
+
+   call pager_init    // Инициализируем наш менеджер памяти
+
+
+// Заполняем TSS главной задачи. См. комментарии в scheduler.c
+   call alloc_first_page  // Берем страницу для TSS главной задачи
+   mov %eax, %edx
+   mov %edx, Task       //   кладем ее адрес в Task[0]
+
+
+   // esp0 и ss0 заполняются для системных вызовов
+   mov %edx, ESP0(%edx)
+   addl $END_OF_SYSCALL_STACK, ESP0(%edx)
+   mov %ss, SS0(%edx)
+
+   mov %esp,   ESP(%edx)
+   mov %ss,    SS(%edx)
+   mov %ebp,   EBP(%edx)
+   mov %es,    ES(%edx)
+   mov %cs,    CS(%edx)
+   mov %ds,    DS(%edx)
+   mov %ds,    FS(%edx)
+   movl $0x200,EFLAGS(%edx)
+   movl $start_my_kernel, EIP(%edx)
+// поле tsss заполним чуть позже
 
 
 // FIXME: Я не уверен, что создавать отдельную задачу на каждый
@@ -66,112 +134,121 @@ popfl
 // придумать что-то более подходящее.
 
 // Заполняем TSS задачи-планировщика (IRQ0)
-   movl %esp,  IRQ0_ESP0
-   movl %ss,   IRQ0_SS0
-   movl %esp,  IRQ0_ESP
-   movl %ss,   IRQ0_SS
-   movl %ebp,  IRQ0_EBP
-   movl %es,   IRQ0_ES
-   movl %cs,   IRQ0_CS
-   movl %ds,   IRQ0_DS
-   movl $0x10, IRQ0_FS
-   movl $0x00000000, IRQ0_EFLAGS  // Все флаги сброшены
-   movl $irq0_int, IRQ0_EIP
+   movl $irq0_tss, %edi
+   movl %esp,  ESP0(%edi)
+   movl %ss,   SS0(%edi)
+   movl %esp,  ESP(%edi)
+   movl %ss,   SS(%edi)
+   movl %ebp,  EBP(%edi)
+   movl %es,   ES(%edi)
+   movl %cs,   CS(%edi)
+   movl %ds,   DS(%edi)
+   movl %ds,   FS(%edi)
+   movl $0x0,  EFLAGS(%edi)  // Все флаги сброшены
+   movl $irq0_int, EIP(%edi)
+   movl $0x0,  CR3(%edi)
+   movl $0x0,  IOM(%edi)
 
 // Заполняем TSS функции игнорирования прерывания
-   movl %esp,  II_ESP0
-   movl %ss,   II_SS0
-   movl %esp,  II_ESP
-   movl %ss,   II_SS
-   movl %ebp,  II_EBP
-   movl %es,   II_ES
-   movl %cs,   II_CS
-   movl %ds,   II_DS
-   movl $0x10, II_FS
-   movl $0x00000000, II_EFLAGS  // Все флаги сброшены
-   movl $irq0_int, II_EIP
+   movl $ii_tss, %edi
+   movl %esp,  ESP0(%edi)
+   movl %ss,   SS0(%edi)
+   movl %esp,  ESP(%edi)
+   movl %ss,   SS(%edi)
+   movl %ebp,  EBP(%edi)
+   movl %es,   ES(%edi)
+   movl %cs,   CS(%edi)
+   movl %ds,   DS(%edi)
+   movl %ds,   FS(%edi)
+   movl $0x0,  EFLAGS(%edi)  // Все флаги сброшены
+   movl $irq0_int, EIP(%edi)
+   movl $0x0,  CR3(%edi)
+   movl $0x0,  IOM(%edi)
 
-// Заполняем TSS обработчика IRQ1
-   movl %esp,  IRQ1_ESP0
-   movl %ss,   IRQ1_SS0
-   movl %esp,  IRQ1_ESP
-   movl %ss,   IRQ1_SS
-   movl %ebp,  IRQ1_EBP
-   movl %es,   IRQ1_ES
-   movl %cs,   IRQ1_CS
-   movl %ds,   IRQ1_DS
-   movl $0x10, IRQ1_FS
-   movl $0x00000000, IRQ1_EFLAGS  // Все флаги сброшены
-   movl $irq1_int, IRQ1_EIP
-
+// Заполняем TSS обработчика IRQ6
+   movl $irq6_tss, %edi
+   movl %esp,  ESP0(%edi)
+   movl %ss,   SS0(%edi)
+   movl %esp,  ESP(%edi)
+   movl %ss,   SS(%edi)
+   movl %ebp,  EBP(%edi)
+   movl %es,   ES(%edi)
+   movl %cs,   CS(%edi)
+   movl %ds,   DS(%edi)
+   movl %ds,   FS(%edi)
+   movl $0x0,  EFLAGS(%edi)  // Все флаги сброшены
+   movl $irq6_int, EIP(%edi)
+   movl $0x0,  CR3(%edi)
+   movl $0x0,  IOM(%edi)
 
 
 // Дописываем TSS'ы к GDT
-   sgdt GDT_Size     // Размер и адрес GDT помещаются в GDT_Size и GDT_Addr
 
    xor %eax, %eax
-   mov GDT_Size, %ax
+   mov GDT_Size, %ax // eax = размер GDT - 1
 
    mov GDT_Addr, %ebx
 
    add %eax, %ebx    // ebx += eax + 1
    inc %ebx
 
-   mov $TaskPool, %edx
-   movw $0x0067,  (%ebx); add $2, %ebx
-   movw %dx,      (%ebx); add $2, %ebx
+
+// Строим дескрипторы TSS'ов
+   mov Task, %edx // В Task[0] - адрес TSS первой задачи
+   movw $0x0067,  0(%ebx) // Лимит
+   movw %dx,      2(%ebx) // Адрес[15:0]
    mov %edx,   %ecx
    shr $16,    %ecx
-   movb %cl,      (%ebx) ; inc %ebx
-   movb $0x89,    (%ebx) ; inc %ebx
-   movb $0x40,    (%ebx) ; inc %ebx
-   movb %ch,      (%ebx) ; inc %ebx
+   movb %cl,      4(%ebx) // Адрес[23:16]
+   movb $0x89,    5(%ebx) // Прочее
+   movb $0x40,    6(%ebx)
+   movb %ch,      7(%ebx) // Адрес[31:24]
+   add $8, %ebx
 
-   movw $24, 104(%edx)
+   movw $MAIN_TSS, 104(%edx)   // Заполняем поле tsss в TaskStruct
+                           // первой задачи.
+// Остальные TSS - аналогично:
 
-   mov $ii_tss, %edx
-   movw $0x0067,  (%ebx); add $2, %ebx
-   movw %dx,      (%ebx); add $2, %ebx
+
+// TSS'ы должны адресоваться через системную память,
+//   поэтому нужно к адресу прибавить 3Gb
+   mov $ii_tss+0x80000000, %edx
+   movw $0x0067,  0(%ebx)
+   movw %dx,      2(%ebx)
    mov %edx,   %ecx
    shr $16,    %ecx
-   movb %cl,      (%ebx) ; inc %ebx
-   movb $0x89,    (%ebx) ; inc %ebx
-   movb $0x40,    (%ebx) ; inc %ebx
-   movb %ch,      (%ebx) ; inc %ebx
+   movb %cl,      4(%ebx)
+   movb $0x89,    5(%ebx)
+   movb $0x40,    6(%ebx)
+   movb %ch,      7(%ebx)
+   add $8, %ebx
 
-   mov $irq0_tss, %edx
-   movw $0x0067,  (%ebx); add $2, %ebx
-   movw %dx,      (%ebx); add $2, %ebx
+   mov $irq0_tss+0x80000000, %edx
+   movw $0x0067,  0(%ebx)
+   movw %dx,      2(%ebx)
    mov %edx,   %ecx
    shr $16,    %ecx
-   movb %cl,      (%ebx) ; inc %ebx
-   movb $0x89,    (%ebx) ; inc %ebx
-   movb $0x40,    (%ebx) ; inc %ebx
-   movb %ch,      (%ebx) ; inc %ebx
+   movb %cl,      4(%ebx)
+   movb $0x89,    5(%ebx)
+   movb $0x40,    6(%ebx)
+   movb %ch,      7(%ebx)
+   add $8, %ebx
 
-   mov $irq1_tss, %edx
-   movw $0x0067,  (%ebx); add $2, %ebx
-   movw %dx,      (%ebx); add $2, %ebx
+   mov $irq6_tss+0x80000000, %edx
+   movw $0x0067,  0(%ebx)
+   movw %dx,      2(%ebx)
    mov %edx,   %ecx
    shr $16,    %ecx
-   movb %cl,      (%ebx) ; inc %ebx
-   movb $0x89,    (%ebx) ; inc %ebx
-   movb $0x40,    (%ebx) ; inc %ebx
-   movb %ch,      (%ebx) ; inc %ebx
+   movb %cl,      4(%ebx)
+   movb $0x89,    5(%ebx)
+   movb $0x40,    6(%ebx)
+   movb %ch,      7(%ebx)
+   add $8, %ebx
 
 
-   addw $32, %ax  // 32 - суммарный размер созданных TSS
-   movw %ax, GDT_Size
+   addw $32, GDT_Size  // 32 - суммарный размер созданных TSS
 
-   lgdt GDT_Size
-
-   sub $31, %ax // ax = GDT_Size - 31
-
-// Трюк, делающий переход ljmp, расположенный по метке jjj
-// на сегмент %ax вместо $0xAA. Я не нашел способа сделать
-// это культурно. Наверное, плохо искал.
-   mov $jjj, %ebx
-   mov %ax, 5(%ebx)
+   lgdt gdt_descr
 
 
 // Устанавливаем обработчики всех мыслимых прерываний.
@@ -179,13 +256,12 @@ popfl
 // TSS игнорирующего обработчика.
 // Для IRQ0 ставим TSS планировщика
 setup_idt:
-   addw $8, %ax
-   mov %ax, %bx
+   mov $II_TSS, %bx
 
-   shll $16, %eax
+   movl $II_TSS*0x10000, %eax
    movw $0x00008500, %dx
 
-   mov $_idt, %edi
+   mov $idt, %edi
    mov $256, %ecx
 rp_sidt:
    movl %eax, (%edi)
@@ -194,52 +270,85 @@ rp_sidt:
    dec %ecx
    jne rp_sidt
 
-
+   // Т.к. idt находится в секции bss, то я не могу просто
+   // записать в idt_descr ".long 0x80000000+$idt". Поэтому перед
+   // загрузкой idt_descr нужно добавить реальный адрес
+   // idt в оставленное поле .long 0x80000000. Разумеется,
+   // все должно адресоваться через верхний гигабайт.
+   movl $idt_descr, %eax
+   addl $idt, 2(%eax)
    lidt idt_descr
 
 
-// Записываем TSS планировщика как обработчик irq0, а
-// обработчик IRQ1 - на IRQ1
-   mov %bx, %ax
-   addw $8, %ax
+// Записываем TSS планировщика как обработчик IRQ0, а
+// обработчик IRQ6 - на IRQ6
+   mov $idt+0x8*8, %edi   // IRQ0 = int 0x8
+   movw $0x0000,  0(%edi)
+   movw $IRQ0_TSS,2(%edi)
+   movw $0x8500,  4(%edi)
+   movw $0x0000,  6(%edi)
 
-   mov $_idt, %edi
-   addl $64, %edi
-   movw $0x0000, (%edi) ;  add $2, %edi
-   movw %ax, (%edi)     ;  add $2, %edi
-   movw $0x8500, (%edi) ;  add $2, %edi
-   movw $0x0000, (%edi)
+   mov $idt+0xe*8, %edi // IRQ6 = int 0xe
+   movw $0x0000,  0(%edi)
+   movw $IRQ6_TSS,2(%edi)
+   movw $0x8500,  4(%edi)
+   movw $0x0000,  6(%edi)
 
 
-   addw $8, %ax
 
-   mov $_idt, %edi
-   addl $112, %edi
-   movw $0x0000, (%edi) ;  add $2, %edi
-   movw %ax, (%edi)     ;  add $2, %edi
-   movw $0x8500, (%edi) ;  add $2, %edi
-   movw $0x0000, (%edi)
+   // Записываем системный вызов как обработчик int 0x80
+   // Используем trap-gate
+   mov $idt+0x80*8, %edi
+   mov $SYS_CALL, %edx
+   movw %dx,      0(%edi)
+   movw $0x0008,  2(%edi)
+   movw $0xef00,  4(%edi)
+   shr $16, %edx
+   movw %dx,      6(%edi)
+
+
+   mov $idt+0x0d*8, %edi
+   mov $gp_fault, %edx
+   movw %dx,      0(%edi)
+   movw $0x0008,  2(%edi)
+   movw $0xef00,  4(%edi)
+   shr $16, %edx
+   movw %dx,      6(%edi)
+
+
+// FIXME!!! Я не могу установить обработчик #PF пока не
+// переназначу дискетное IRQ6 на другое прерывание. Т.к.
+// пока мне это делать лень, то пока у нас #PF будет вызывать
+// прерывание как дискета ;)
+//   mov $idt+0x0e*8, %edi
+//   mov $pf_fault, %edx
+//   movw %dx,      0(%edi)
+//   movw $0x0008,  2(%edi)
+//   movw $0xef00,  4(%edi)
+//   shr $16, %edx
+//   movw %dx,      6(%edi)
+
+
 
 
 // Инициализируем планировщик
-call init_scheduler
-
-
-// Уффф... Переходим на C-ядро!
-
-sti
-//call start_my_kernel
-
-jjj:
-   ljmp $0xAA, $0x00
+   call init_scheduler
 
 
 
 
-// Мы никогда не должны сюда вернуться
-inf:  jmp inf
+  // Уффф... Все!..
+
+   sti
+
+   // Переключаемся на главную задачу
+   ljmp $MAIN_TSS, $0x0
 
 
+
+// "Обработчик" неиспользуемых прерываний
+// Все что он делает - говорит PIC'у, что прерывание
+// обработано
 .align 2
 .global ignore_int
 ignore_int:
@@ -251,15 +360,13 @@ ignore_int:
 
 
 // Планировщик
-// Сейчас он снимает текущую задачу, выбирает очередную из
-// очереди TSS_QUEUE и запускает.
 .align 2
 .global irq0_int
 irq0_int:
-   call scheduler
+   call scheduler // Вызываем C-функцию
 
-   incb 0xb8f00
-   movb $0x07, 0xb8f01
+   incb 0xb8f00         // Для визуального наблюдения
+   movb $0x07, 0xb8f01  //   за тем, как все зависает
 
    mov $0x20, %al
    out %al, $0x20
@@ -269,11 +376,11 @@ irq0_int:
 
 
 
-// Обработчик IRQ1. Сейчас он просто устанавливает флаг __FD_INT_FLAG
+// Обработчик IRQ6. Сейчас он просто устанавливает флаг __FD_INT_FLAG
 // в 1 для драйвера диска.
 .align 2
-.global irq1_int
-irq1_int:
+.global irq6_int
+irq6_int:
 
    incb 0xb8f02
    movb $0x09, 0xb8f03
@@ -284,118 +391,173 @@ irq1_int:
    out %al, $0x20
 
    iret
-   jmp irq1_int
+   jmp irq6_int
 
 
 
-
+// Код Системного Вызова
+//
+// При системном вызове должно быть:
+//   * eax = номер системного вызова
+//   * ebx,ecx,edx = параметры системного вызова
+//
+// Сегменты переключаются на сегменты ядра. Обращение
+// к пользовательской памяти производится через GS.
+.global SYS_CALL
 .align 2
-.word 0
+SYS_CALL:
+   push %ds
+   push %es
+   push %fs
+   push %gs
+   push %edx
+   push %ecx
+   push %ebx
+
+   movl $KERNEL_DS, %ebx
+   movl %ebx, %ds
+   movl %ebx, %es
+   movl %ebx, %fs
+   movl $USER_DS, %ebx
+   movl %ebx, %gs
+
+   // Существует ли такой syscall?
+   cmpl syscall_nr, %eax
+   jge bad_syscall
+
+   call *syscall_table(,%eax,4)
+
+syscall_ret:
+
+   pop %ebx
+   pop %ecx
+   pop %edx
+   pop %gs
+   pop %fs
+   pop %es
+   pop %ds
+
+   iret
+
+bad_syscall:
+   mov $-1, %eax
+   jmp syscall_ret
+   
+
+
+// Обработчик General Protection Fault
+// Просто убивает текущий процесс
+.global gp_fault
+.align 2
+gp_fault:
+   mov $KERNEL_DS, %ebx
+   mov %ebx, %ds
+   mov %ebx, %es
+   mov %ebx, %fs
+   mov $USER_DS, %ebx
+   mov %ebx, %gs
+
+
+   push $gp_str
+   push $0x04
+   call printf_color // Скажем в чем дело
+   pop %eax
+   pop %eax
+
+
+   call scheduler_kill_current
+// Мы сюда не вернемся
+
+gp_str:
+   .ascii "Ouch! General Protection Fault! Killing current task...\n"
+   .byte 0
+
+
+
+
+// Обработчик Page Fault
+// В будущем он будет делать умные вещи, например Demand-Loading,
+// Copy-On-Write, Swapping и проч. В сейчас просто грохнем процесс.
+// FIXME: Сейчас это не работает! см. комментарии для кода установки
+// прерываний.
+.global pf_fault
+.align 2
+pf_fault:
+   mov $KERNEL_DS, %ebx
+   mov %ebx, %ds
+   mov %ebx, %es
+   mov %ebx, %fs
+   mov $USER_DS, %ebx
+   mov %ebx, %gs
+
+
+   push $pf_str
+   push $0x04
+   call printf_color
+   pop %eax
+   pop %eax
+
+
+   call scheduler_kill_current
+
+
+pf_str:
+   .ascii "Ouch! Page Fault! Killing current task...\n"
+   .byte 0
+
+
+
+
+// Дескриптор IDT
+.align 2
 idt_descr:
    .word 256 * 8 - 1
-   .long _idt
+   .long 0x80000000 // + $idt see above
 
-.equiv _idt, 0x00040000
+// Таблица дескрипторов
+.global gdt
+.align 16
+gdt:
+// Это заменит GDT, установленную загрузчиком
+   .long 0x00000000  // Нулевой дескриптор всегда
+   .long 0x00000000  //  должен быть нулевым
 
+   .long 0x0000ffff  // Сегмент кода
+   .long 0x80c79a00  //   для ядра
 
+   .long 0x0000ffff  // Сегмент данных
+   .long 0x80c79200  //   для ядра
 
-// Сюда загрузим адрес и размер GDT.
-// FIXME: Мы дописываем сегменты к старой GDT, хранящейся
-// в бутсекторе.
-GDT_Size: .word 0x0000
-GDT_Addr: .long 0x00000000
+   .long 0x0000ffff  // Сегмент кода
+   .long 0x00c7fa00  //   для процессов
 
-
-// Область для TSS'ов различных задач. Конечно, потом ее не
-// будет в коде, когда я придумаю культурное размещение в
-// памяти всех системных таблиц.
-
-
-.global ii_tss
-ii_tss:
-II_TL  :   .long 0x00000000      /* Task link */
-II_ESP0:   .long 0x00000000      /* ESP0 */
-II_SS0 :   .long 0x00000000      /* SS0 */
-II_ESP1:   .long 0x00000000      /* ESP1 */
-II_SS1 :   .long 0x00000000      /* SS1 */
-II_ESP2:   .long 0x00000000      /* ESP2 */
-II_SS2 :   .long 0x00000000      /* SS2 */
-II_CR3 :   .long 0x00000000      /* CR3 */
-II_EIP :   .long 0x00000000      /* EIP */
-II_EFLAGS: .long 0x00000000      /* EFLAGS */
-II_EAX :   .long 0x00000000      /* EAX */
-II_ECX :   .long 0x00000000      /* ECX */
-II_EDX :   .long 0x00000000      /* EDX */
-II_EBX :   .long 0x00000000      /* EBX */
-II_ESP :   .long 0x00000000      /* ESP */
-II_EBP :   .long 0x00000000      /* EBP */
-II_ESI :   .long 0x00000000      /* ESI */
-II_EDI :   .long 0x00000000      /* EDI */
-II_ES  :   .long 0x00000000      /* ES */
-II_CS  :   .long 0x00000000      /* CS */
-II_SS  :   .long 0x00000000      /* SS */
-II_DS  :   .long 0x00000000      /* DS */
-II_FS  :   .long 0x00000000      /* FS */
-II_GS  :   .long 0x00000000      /* GS */
-II_LDT :   .long 0x00000000      /* LDT */
-II_IOM :   .long 0x00000000      /* T and I/O Map */
+   .long 0x0000ffff  // Сегмент данных
+   .long 0x00c7f200  //   для процессов
 
 
-.global irq0_tss
-irq0_tss:
-IRQ0_TL  :   .long 0x00000000      /* Task link */
-IRQ0_ESP0:   .long 0x00000000      /* ESP0 */
-IRQ0_SS0 :   .long 0x00000000      /* SS0 */
-IRQ0_ESP1:   .long 0x00000000      /* ESP1 */
-IRQ0_SS1 :   .long 0x00000000      /* SS1 */
-IRQ0_ESP2:   .long 0x00000000      /* ESP2 */
-IRQ0_SS2 :   .long 0x00000000      /* SS2 */
-IRQ0_CR3 :   .long 0x00000000      /* CR3 */
-IRQ0_EIP :   .long 0x00000000      /* EIP */
-IRQ0_EFLAGS: .long 0x00000000      /* EFLAGS */
-IRQ0_EAX :   .long 0x00000000      /* EAX */
-IRQ0_ECX :   .long 0x00000000      /* ECX */
-IRQ0_EDX :   .long 0x00000000      /* EDX */
-IRQ0_EBX :   .long 0x00000000      /* EBX */
-IRQ0_ESP :   .long 0x00000000      /* ESP */
-IRQ0_EBP :   .long 0x00000000      /* EBP */
-IRQ0_ESI :   .long 0x00000000      /* ESI */
-IRQ0_EDI :   .long 0x00000000      /* EDI */
-IRQ0_ES  :   .long 0x00000000      /* ES */
-IRQ0_CS  :   .long 0x00000000      /* CS */
-IRQ0_SS  :   .long 0x00000000      /* SS */
-IRQ0_DS  :   .long 0x00000000      /* DS */
-IRQ0_FS  :   .long 0x00000000      /* FS */
-IRQ0_GS  :   .long 0x00000000      /* GS */
-IRQ0_LDT :   .long 0x00000000      /* LDT */
-IRQ0_IOM :   .long 0x00000000      /* T and I/O Map */
+   .fill 256-5, 8, 0 // 5 уже установлено
+
+// Дескриптор GDT
+.align 2
+.global gdt_descr
+gdt_descr:
+GDT_Size: .word 0x0027     // Эти значения изменятся
+GDT_Addr: .long 0x80000000+gdt //   во время выполнения
+
+.bss
 
 
-.global irq1_tss
-irq1_tss:
-IRQ1_TL  :   .long 0x00000000      /* Task link */
-IRQ1_ESP0:   .long 0x00000000      /* ESP0 */
-IRQ1_SS0 :   .long 0x00000000      /* SS0 */
-IRQ1_ESP1:   .long 0x00000000      /* ESP1 */
-IRQ1_SS1 :   .long 0x00000000      /* SS1 */
-IRQ1_ESP2:   .long 0x00000000      /* ESP2 */
-IRQ1_SS2 :   .long 0x00000000      /* SS2 */
-IRQ1_CR3 :   .long 0x00000000      /* CR3 */
-IRQ1_EIP :   .long 0x00000000      /* EIP */
-IRQ1_EFLAGS: .long 0x00000000      /* EFLAGS */
-IRQ1_EAX :   .long 0x00000000      /* EAX */
-IRQ1_ECX :   .long 0x00000000      /* ECX */
-IRQ1_EDX :   .long 0x00000000      /* EDX */
-IRQ1_EBX :   .long 0x00000000      /* EBX */
-IRQ1_ESP :   .long 0x00000000      /* ESP */
-IRQ1_EBP :   .long 0x00000000      /* EBP */
-IRQ1_ESI :   .long 0x00000000      /* ESI */
-IRQ1_EDI :   .long 0x00000000      /* EDI */
-IRQ1_ES  :   .long 0x00000000      /* ES */
-IRQ1_CS  :   .long 0x00000000      /* CS */
-IRQ1_SS  :   .long 0x00000000      /* SS */
-IRQ1_DS  :   .long 0x00000000      /* DS */
-IRQ1_FS  :   .long 0x00000000      /* FS */
-IRQ1_GS  :   .long 0x00000000      /* GS */
-IRQ1_LDT :   .long 0x00000000      /* LDT */
-IRQ1_IOM :   .long 0x00000000      /* T and I/O Map */
+// Область для TSS'ов обработчиков прерываний
+
+ii_tss:     .fill 0x68,1,0
+.global irq0_tss  // Мы его трогаем в scheduler()
+irq0_tss:   .fill 0x68,1,0
+irq6_tss:   .fill 0x68,1,0
+
+
+// Таблица прерываний
+.global idt
+.align 16
+idt:
+   .fill 256, 8, 0
+

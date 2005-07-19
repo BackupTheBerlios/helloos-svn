@@ -18,10 +18,13 @@
 #include "types.h"
 
 
-void* memcpy(void* dest, const void* src, uint n);
+void *memcpy(void *dest, const void *src, size_t n);
+void *memmove(uchar *dest, const uchar *src, size_t n);
+void *memset(void *s, int c, size_t n);
 int strcmp(char *a, char *b);
 int strncmp(char *a, char *b, uint n);
 int strlen(char *s);
+
 
 
 #endif // __HELLO_STRING_H

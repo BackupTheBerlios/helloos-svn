@@ -23,7 +23,7 @@
       Microsoft Hardware White Paper
 
 [5] Linux Sources
-      Version 0.0.1
+      Versions 0.0.1, 1.0 and 2.6.3
 
 [6] MS-DOS Для Программиста
       А. Фролов, Г. Фролов
@@ -31,3 +31,10 @@
 
 [7] Intel 82077A Floppy Disk Controller Data Sheet
       May 1994
+
+[8] Using the GNU Compiler Collection
+      Richard Stallman
+      December 30, 2002
+
+[9] OpenBSD Programmer's Manual: a.out binary format
+      June 5, 1993

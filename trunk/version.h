@@ -21,7 +21,7 @@
 
 #define VER_MAJOR    0
 #define VER_MINOR    0
-#define VER_ALPHA    'b'
+#define VER_ALPHA    'd'
 
 
 #endif // __VERSION_H
