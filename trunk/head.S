@@ -41,6 +41,20 @@ mov $0x30000, %esp
 pushl $0
 popfl
 
+// Инициализируем консольный ввод/вывод
+   xor %eax, %eax
+   movb 0x98001, %al
+   push %eax
+   movb 0x98000, %al
+   push %eax
+   call scrio_init
+   add $8, %esp
+
+// И сразу же выводим сообщение
+   push $woow_msg
+   call puts
+   add $4, %esp
+
 
 
 // Устанавливаем страничную адресацию
@@ -50,11 +64,17 @@ popfl
 // маппируют первые физические 8Mb на линейное АП, начиная со второго Гб. Это
 // область ядра и процессам туда доступа нет. Нижние 2 Гб для каждого процесса
 // составляются индивидуально. Сейчас они также маппируют первые 8Мб физ. памяти - это
-// нужно главному процессу.
+// нужно для загрузки.
 // Все процессы пользуются одними и теми же сегментами кода и данных с DPL=3,
 // базой 0 и лимитом 2Gb, то есть им доступны только "их" страницы. Ядро и системные
 // вызовы пользуются сегментами с DPL=0, базой 2Gb и лимитом 2Gb, а так же сегментами
 // процессов для доступа к памяти процессов.
+
+
+// Говорим что делаем и делаем что говорим ;)
+   push $mapping_msg
+   call puts
+   add $4, %esp
 
 
 // Обнуляем каталог страниц
@@ -92,6 +112,9 @@ popfl
    addl $0x1000, %eax
    loop 1b
 
+   push $mbytes
+   call puts
+   add $4, %esp
 
 
    xorl %eax, %eax   // Загружаем адрес
@@ -101,37 +124,24 @@ popfl
    orl $0x80000000, %eax   // Включаем страничную адресацию
    movl %eax, %cr0
 
-
-
    call pager_init    // Инициализируем наш менеджер памяти
 
 
-// Заполняем TSS главной задачи. См. комментарии в scheduler.c
-   call alloc_first_page  // Берем страницу для TSS главной задачи
-   mov %eax, %edx
-   mov %edx, Task       //   кладем ее адрес в Task[0]
 
+   push $filling_msg
+   call puts
+   add $4, %esp
 
-   // esp0 и ss0 заполняются для системных вызовов
-   mov %edx, ESP0(%edx)
-   addl $END_OF_SYSCALL_STACK, ESP0(%edx)
-   mov %ss, SS0(%edx)
-
-   mov %esp,   ESP(%edx)
-   mov %ss,    SS(%edx)
-   mov %ebp,   EBP(%edx)
-   mov %es,    ES(%edx)
-   mov %cs,    CS(%edx)
-   mov %ds,    DS(%edx)
-   mov %ds,    FS(%edx)
-   movl $0x200,EFLAGS(%edx)
-   movl $start_my_kernel, EIP(%edx)
-// поле tsss заполним чуть позже
 
 
 // FIXME: Я не уверен, что создавать отдельную задачу на каждый
 // обработчик прерывания это хорошая идея. Может быть нужно
 // придумать что-то более подходящее.
+
+   push $tss_msg
+   call puts
+   add $4, %esp
+
 
 // Заполняем TSS задачи-планировщика (IRQ0)
    movl $irq0_tss, %edi
@@ -149,40 +159,13 @@ popfl
    movl $0x0,  CR3(%edi)
    movl $0x0,  IOM(%edi)
 
-// Заполняем TSS функции игнорирования прерывания
-   movl $ii_tss, %edi
-   movl %esp,  ESP0(%edi)
-   movl %ss,   SS0(%edi)
-   movl %esp,  ESP(%edi)
-   movl %ss,   SS(%edi)
-   movl %ebp,  EBP(%edi)
-   movl %es,   ES(%edi)
-   movl %cs,   CS(%edi)
-   movl %ds,   DS(%edi)
-   movl %ds,   FS(%edi)
-   movl $0x0,  EFLAGS(%edi)  // Все флаги сброшены
-   movl $irq0_int, EIP(%edi)
-   movl $0x0,  CR3(%edi)
-   movl $0x0,  IOM(%edi)
-
-// Заполняем TSS обработчика IRQ6
-   movl $irq6_tss, %edi
-   movl %esp,  ESP0(%edi)
-   movl %ss,   SS0(%edi)
-   movl %esp,  ESP(%edi)
-   movl %ss,   SS(%edi)
-   movl %ebp,  EBP(%edi)
-   movl %es,   ES(%edi)
-   movl %cs,   CS(%edi)
-   movl %ds,   DS(%edi)
-   movl %ds,   FS(%edi)
-   movl $0x0,  EFLAGS(%edi)  // Все флаги сброшены
-   movl $irq6_int, EIP(%edi)
-   movl $0x0,  CR3(%edi)
-   movl $0x0,  IOM(%edi)
-
-
 // Дописываем TSS'ы к GDT
+
+
+   push $gdt_msg
+   call puts
+   add $4, %esp
+
 
    xor %eax, %eax
    mov GDT_Size, %ax // eax = размер GDT - 1
@@ -191,37 +174,6 @@ popfl
 
    add %eax, %ebx    // ebx += eax + 1
    inc %ebx
-
-
-// Строим дескрипторы TSS'ов
-   mov Task, %edx // В Task[0] - адрес TSS первой задачи
-   movw $0x0067,  0(%ebx) // Лимит
-   movw %dx,      2(%ebx) // Адрес[15:0]
-   mov %edx,   %ecx
-   shr $16,    %ecx
-   movb %cl,      4(%ebx) // Адрес[23:16]
-   movb $0x89,    5(%ebx) // Прочее
-   movb $0x40,    6(%ebx)
-   movb %ch,      7(%ebx) // Адрес[31:24]
-   add $8, %ebx
-
-   movw $MAIN_TSS, 104(%edx)   // Заполняем поле tsss в TaskStruct
-                           // первой задачи.
-// Остальные TSS - аналогично:
-
-
-// TSS'ы должны адресоваться через системную память,
-//   поэтому нужно к адресу прибавить 3Gb
-   mov $ii_tss+0x80000000, %edx
-   movw $0x0067,  0(%ebx)
-   movw %dx,      2(%ebx)
-   mov %edx,   %ecx
-   shr $16,    %ecx
-   movb %cl,      4(%ebx)
-   movb $0x89,    5(%ebx)
-   movb $0x40,    6(%ebx)
-   movb %ch,      7(%ebx)
-   add $8, %ebx
 
    mov $irq0_tss+0x80000000, %edx
    movw $0x0067,  0(%ebx)
@@ -232,21 +184,8 @@ popfl
    movb $0x89,    5(%ebx)
    movb $0x40,    6(%ebx)
    movb %ch,      7(%ebx)
-   add $8, %ebx
 
-   mov $irq6_tss+0x80000000, %edx
-   movw $0x0067,  0(%ebx)
-   movw %dx,      2(%ebx)
-   mov %edx,   %ecx
-   shr $16,    %ecx
-   movb %cl,      4(%ebx)
-   movb $0x89,    5(%ebx)
-   movb $0x40,    6(%ebx)
-   movb %ch,      7(%ebx)
-   add $8, %ebx
-
-
-   addw $32, GDT_Size  // 32 - суммарный размер созданных TSS
+   addw $8, GDT_Size  // 32 - суммарный размер созданных TSS
 
    lgdt gdt_descr
 
@@ -255,11 +194,16 @@ popfl
 // Для всех неиспользуемых (пока) прерываний ставим
 // TSS игнорирующего обработчика.
 // Для IRQ0 ставим TSS планировщика
-setup_idt:
-   mov $II_TSS, %bx
 
-   movl $II_TSS*0x10000, %eax
-   movw $0x00008500, %dx
+   push $idt_msg
+   call puts
+   add $4, %esp
+
+setup_idt:
+   mov $ignore_int, %edx
+   mov $KERNEL_CS*0x10000, %eax
+   mov %dx, %ax
+   mov $0x8e00, %dx
 
    mov $idt, %edi
    mov $256, %ecx
@@ -270,34 +214,30 @@ rp_sidt:
    dec %ecx
    jne rp_sidt
 
-   // Т.к. idt находится в секции bss, то я не могу просто
-   // записать в idt_descr ".long 0x80000000+$idt". Поэтому перед
-   // загрузкой idt_descr нужно добавить реальный адрес
-   // idt в оставленное поле .long 0x80000000. Разумеется,
-   // все должно адресоваться через верхний гигабайт.
+// Т.к. idt находится в секции bss, то я не могу просто
+// записать в idt_descr ".long 0x80000000+$idt". Поэтому перед
+// загрузкой idt_descr нужно добавить реальный адрес
+// idt в оставленное поле .long 0x80000000. Разумеется,
+// все должно адресоваться через верхнюю память.
    movl $idt_descr, %eax
    addl $idt, 2(%eax)
    lidt idt_descr
 
 
-// Записываем TSS планировщика как обработчик IRQ0, а
-// обработчик IRQ6 - на IRQ6
-   mov $idt+0x8*8, %edi   // IRQ0 = int 0x8
-   movw $0x0000,  0(%edi)
-   movw $IRQ0_TSS,2(%edi)
-   movw $0x8500,  4(%edi)
-   movw $0x0000,  6(%edi)
-
-   mov $idt+0xe*8, %edi // IRQ6 = int 0xe
-   movw $0x0000,  0(%edi)
-   movw $IRQ6_TSS,2(%edi)
-   movw $0x8500,  4(%edi)
-   movw $0x0000,  6(%edi)
+// Записываем обработчик IRQ6 - на IRQ6
+// Используем interrupt-gate
+   mov $idt+0xe*8, %edi
+   mov $irq6_int, %edx
+   movw %dx,      0(%edi)
+   movw $KERNEL_CS, 2(%edi)
+   movw $0x8e00,  4(%edi)
+   shrl $16, %edx
+   movw %dx,      6(%edi)
 
 
 
-   // Записываем системный вызов как обработчик int 0x80
-   // Используем trap-gate
+// Записываем системный вызов как обработчик int 0x80
+// Используем trap-gate
    mov $idt+0x80*8, %edi
    mov $SYS_CALL, %edx
    movw %dx,      0(%edi)
@@ -307,6 +247,8 @@ rp_sidt:
    movw %dx,      6(%edi)
 
 
+// Записываем обработчик #GP
+// trap-gate
    mov $idt+0x0d*8, %edi
    mov $gp_fault, %edx
    movw %dx,      0(%edi)
@@ -330,19 +272,66 @@ rp_sidt:
 
 
 
-
 // Инициализируем планировщик
    call init_scheduler
 
 
-
-
-  // Уффф... Все!..
-
+// Да будет свет!
    sti
 
-   // Переключаемся на главную задачу
-   ljmp $MAIN_TSS, $0x0
+   call fd_init
+   call fat_init
+
+   push $loading_start_msg
+   call puts
+   add $4, %esp
+
+   push $startfilename
+   call aout_load
+   add $4, %esp
+
+
+// Записываем планировщик как обработчик IRQ0
+// Раньше этого нельзя было сделать, т.к. он сразу
+// попытался бы переключится на отсутствующую задачу
+   mov $idt+0x8*8, %edi   // IRQ0 = int 0x8
+   movw $0x0000,  0(%edi)
+   movw $IRQ0_TSS,2(%edi)
+   movw $0x8500,  4(%edi)
+   movw $0x0000,  6(%edi)
+
+   // Уффф... Все!..
+   // Переключаемся на главную задачу вызывая планировщик
+   int $0x8
+
+
+startfilename:
+   .ascii "start.out\0"
+
+
+woow_msg:
+   .ascii "\001\024woow!\n\0"
+
+mapping_msg:
+   .ascii "\001\023Mapping pages...\0"
+
+filling_msg:
+   .ascii "\001\023Filling system tables...\t\0"
+
+tss_msg:
+   .ascii "\001\022TSS... \0"
+
+gdt_msg:
+   .ascii "\001\022GDT... \0"
+
+idt_msg:
+   .ascii "\001\022IDT...\n\0"
+
+mbytes:
+   .ascii "\001\022\t\t8Mb mapped on low and high memory\n\0"
+
+loading_start_msg:
+   .ascii "\nOk, \001\021kernel\003 activated. Now loading the \001\015start.out...\n\n\0"
 
 
 
@@ -352,11 +341,14 @@ rp_sidt:
 .align 2
 .global ignore_int
 ignore_int:
+   push %eax
+
    mov $0x20, %al
    out %al, $0x20
 
+   pop %eax
+
    iret
-   jmp ignore_int
 
 
 // Планировщик
@@ -381,6 +373,10 @@ irq0_int:
 .align 2
 .global irq6_int
 irq6_int:
+   push %eax
+   push %ds
+   mov $KERNEL_DS, %eax
+   mov %eax, %ds
 
    incb 0xb8f02
    movb $0x09, 0xb8f03
@@ -390,8 +386,10 @@ irq6_int:
    mov $0x20, %al
    out %al, $0x20
 
+   pop %ds
+   pop %eax
+
    iret
-   jmp irq6_int
 
 
 
@@ -459,18 +457,15 @@ gp_fault:
 
 
    push $gp_str
-   push $0x04
-   call printf_color // Скажем в чем дело
-   pop %eax
-   pop %eax
+   call puts// Скажем в чем дело
+   add $4, %esp
 
 
    call scheduler_kill_current
 // Мы сюда не вернемся
 
 gp_str:
-   .ascii "Ouch! General Protection Fault! Killing current task...\n"
-   .byte 0
+   .ascii "\001\014Ouch! General Protection Fault! Killing current task...\n\0"
 
 
 
@@ -492,21 +487,19 @@ pf_fault:
 
 
    push $pf_str
-   push $0x04
-   call printf_color
-   pop %eax
-   pop %eax
+   call printf
+   add $4, %esp
 
 
    call scheduler_kill_current
 
 
 pf_str:
-   .ascii "Ouch! Page Fault! Killing current task...\n"
-   .byte 0
+   .ascii "\001\014Ouch! Page Fault! Killing current task...\n\0"
 
 
 
+.data
 
 // Дескриптор IDT
 .align 2

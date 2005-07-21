@@ -13,21 +13,50 @@
 
 #include "types.h"
 #include "hello_stdio.h"
+#include "panic.h"
+#include "scheduler.h"
+#include "aout.h"
+#include "io.h"
 
 
 // Указатель на syscall
 typedef uint (*syscall_ptr)();
 
+// Несложно заметить, что все вызовы сделаны только в отладочных
+// целях и их потом, разумеется заменим на нормальные и защищенные
 
 uint sys_getnewcharaddr();
 uint sys_incvideochar(uint addr);
 uint sys_nputs_color(char *s, uint n, uchar attr);
+
+uint sys_clear_screen();
+uint sys_readline(char *cmd, uint buf_size);
+
+uint sys_panic(char *msg);
+
+uint sys_ps();
+uint sys_kill(uint pid);
+uint sys_pages(uint pid);
+
+uint sys_info(char *filename);
+uint sys_load(char *filename);
+
+uint sys_dbg();
 
 // Таблица системных вызовов
 syscall_ptr syscall_table[] = {
    (syscall_ptr)sys_getnewcharaddr,
    (syscall_ptr)sys_incvideochar,
    (syscall_ptr)sys_nputs_color,
+   (syscall_ptr)sys_clear_screen,
+   (syscall_ptr)sys_readline,
+   (syscall_ptr)sys_panic,
+   (syscall_ptr)sys_ps,
+   (syscall_ptr)sys_kill,
+   (syscall_ptr)sys_info,
+   (syscall_ptr)sys_load,
+   (syscall_ptr)sys_pages,
+   (syscall_ptr)sys_dbg,
 };
 // Вычисляемое количество вызовов. Сделано в виде переменной,
 // чтобы было возможно обращение из ассемблера.
@@ -43,7 +72,7 @@ uint syscall_nr = (sizeof(syscall_table) / sizeof(syscall_ptr));
 inline void strncpy_from_user(void *dest, void *src, uint n)
 {
    __asm__(
-         "push %%es\n"
+         "push %%ds\n"
          "push %%gs\n"
          "pop %%ds\n"
          "movl %0, %%edi\n"
@@ -51,6 +80,36 @@ inline void strncpy_from_user(void *dest, void *src, uint n)
          "cld\n"
          "rep movsb\n"
          "pop %%ds\n"
+         ::"m"(dest), "m"(src), "c"(n):"di", "si");
+}
+
+
+inline void memcpy_from_user(void *dest, void *src, uint n)
+{
+   __asm__(
+         "push %%ds\n"
+         "push %%gs\n"
+         "pop %%ds\n"
+         "movl %0, %%edi\n"
+         "movl %1, %%esi\n"
+         "cld\n"
+         "rep movsb\n"
+         "pop %%ds\n"
+         ::"m"(dest), "m"(src), "c"(n):"di", "si");
+}
+
+
+inline void memcpy_to_user(void *dest, void *src, uint n)
+{
+   __asm__(
+         "push %%es\n"
+         "push %%gs\n"
+         "pop %%es\n"
+         "movl %0, %%edi\n"
+         "movl %1, %%esi\n"
+         "cld\n"
+         "rep movsb\n"
+         "pop %%es\n"
          ::"m"(dest), "m"(src), "c"(n):"di", "si");
 }
 
@@ -85,7 +144,73 @@ uint sys_incvideochar(uint addr)
 uint sys_nputs_color(char *s, uint n, uchar attr)
 {
    uchar localbuf[256];
-   strncpy_from_user(localbuf, s, MIN(n, 256));
+   memcpy_from_user(localbuf, s, MIN(n, 256));
    nputs_color(localbuf, MIN(n, 256), attr);
    return MIN(n, 256);
+}
+
+
+
+uint sys_clear_screen()
+{
+   clear_screen();
+   return 0;
+}
+
+uint sys_readline(char *cmd, uint buf_size)
+{
+   char localbuf[256];
+   readline(localbuf, 256);
+   localbuf[buf_size] = 0;
+   memcpy_to_user(cmd, localbuf, buf_size);
+   return 0;
+}
+
+uint sys_panic(char *msg)
+{
+   char localbuf[256];
+   strncpy_from_user(localbuf, msg, 256);
+   panic(localbuf);
+   return 0;
+}
+
+uint sys_ps()
+{
+   scheduler_ps();
+   return 0;
+}
+
+uint sys_kill(uint pid)
+{
+   scheduler_kill(pid);
+   return 0;
+}
+
+uint sys_info(char *filename)
+{
+   char localbuf[256];
+   strncpy_from_user(localbuf, filename, 256);
+   aout_info(localbuf);
+   return 0;
+}
+
+uint sys_load(char *filename)
+{
+   char localbuf[256];
+   strncpy_from_user(localbuf, filename, 256);
+   aout_load(localbuf);
+   return 0;
+}
+
+uint sys_pages(uint pid)
+{
+   scheduler_pages(pid);
+   return 0;
+}
+
+uint sys_dbg()
+{
+   outw(0x8A00, 0x8A00);
+   outw(0x8AE0, 0x8A00);
+   return 0;
 }

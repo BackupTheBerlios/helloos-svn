@@ -11,32 +11,10 @@
 
 
 #include "types.h"
+#include "user_syscalls.h"
 
 // Заглушки системных вызовов. Разумеется,
 // потом они будут в пользовательских заголовках.
-
-uint mysys_getnewcharaddr()
-{
-   uint res;
-   __asm__("int $0x80\n"
-         :"=a"(res):"0"(0));
-   return res;
-}
-
-uint mysys_incvideochar(uint addr)
-{
-   uint res;
-   __asm__("int $0x80\n"
-         :"=a"(res):"0"(1),"b"(addr));
-   return res;
-}
-uint mysys_nputs_color(char *s, uint n, uchar attr)
-{
-   uint res;
-   __asm__("int $0x80\n"
-         :"=a"(res):"0"(2),"b"(s),"c"(n),"d"(attr));
-   return res;
-}
 
 int main()
 {

@@ -87,10 +87,16 @@ void scroll()
 
 
 // Вывод строки с заданным аттрибутом и ограниченной длиной
+// Поддерживаются следующие метасимволы:
+//    \t - табуляция, выравнивание по границе 8
+//    \001\0xx - смена цвета символа на 0xx-010
+//    \002\0xx - смена цвета фона на 0xx-010
+//    \003     - смена цветов на стандартные (attr)
 void nputs_color(const char *s, uint n, uchar attr)
 {
    int x,y;
    char c;
+   uchar cur_attr = attr;
    x = curr_x;
    y = curr_y;
    while ((c = *s++) != '\0'  &&  n--)
@@ -108,13 +114,35 @@ void nputs_color(const char *s, uint n, uchar attr)
       {
          int t = 8 - (x % 8);
          gotoxy(x,y);
-         nputs_color("        ", t, attr);
+         nputs_color("        ", t, cur_attr);
          x=curr_x;y=curr_y;
+      }
+      else if (c == '\001')
+      {
+         c = *s;
+         if (c >= '\010')
+         {
+            cur_attr = (cur_attr & 0xf0) | ((c - '\010') & 0xf);
+            s++;
+         }
+      }
+      else if (c == '\002')
+      {
+         c = *s;
+         if (c >= '\010')
+         {
+            cur_attr = (cur_attr & 0xf) | ((c - '\010') << 4);
+            s++;
+         }
+      }
+      else if (c == '\003')
+      {
+         cur_attr = attr;
       }
       else
       {
          vidmem [(x + cols * y) * 2] = c;
-         vidmem [(x + cols * y) * 2 + 1] = attr;
+         vidmem [(x + cols * y) * 2 + 1] = cur_attr;
          if (++x >= cols)
          {
             x = 0;

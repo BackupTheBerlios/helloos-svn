@@ -37,8 +37,10 @@ ushort page_map[PAGES_NR];
 // Инициализация
 void pager_init()
 {
+   puts_color("Starting memory manager...", 0x0b);
 // Свободу всем страницам!
    memset(page_map, 0, sizeof(page_map));
+   printf_color(0x0a, "\t%dKb low, %dKb managed memory\n", PAGE_START*4, PAGES_NR*4);
 }
 
 

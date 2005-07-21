@@ -39,10 +39,10 @@
 CFLAGS = -O2 -ffreestanding -W -Wall -save-temps
 # -Werror
 
-KERNEL_OBJS = head.o start.o scheduler.o fd.o panic.o hello_stdio.o hello_string.o fat.o pager.o syscall.o aout.o
+KERNEL_OBJS = head.o scheduler.o fd.o panic.o hello_stdio.o hello_string.o fat.o pager.o syscall.o aout.o
 
 
-all: boot.bin hello test.out gp.out
+all: boot.bin hello test.out gp.out start.out
 
 boot.bin: boot.o
 	ld86 -d -s -o $@ $<
@@ -62,18 +62,36 @@ hello: $(KERNEL_OBJS)
 	gcc $(CFLAGS) -c $<
 
 
+AOUT_CFLAGS = -nostdlib -nostartfiles $(CFLAGS)
+
+###################################
+
+START_OBJS = hello_string.aout.o
+
+start.out: start.aout.o mymain.o $(START_OBJS)
+	i386-aout-ld -M -o $@ start.aout.o mymain.o $(START_OBJS) -e _start_my_kernel >map.start.txt
+
+start.aout.o: start.c
+	i386-aout-gcc -o $@ $(AOUT_CFLAGS) -c $<
+
+
+hello_string.aout.o: hello_string.c
+	i386-aout-gcc -o $@ $(AOUT_CFLAGS) -c $<
+
+
+###################################
 
 test.out: mymain.o test.o
 	i386-aout-ld -M -o $@ test.o mymain.o -e _main >map.aout.txt
 
 test.o: test.c
-	i386-aout-gcc -O0 -nostdlib -nostartfiles -c test.c -save-temps
+	i386-aout-gcc $(AOUT_CFLAGS) -c $< -save-temps
 
 gp.out: mymain.o gp.o
 	i386-aout-ld -M -o $@ gp.o mymain.o -e _main >map.aout.txt
 
 gp.o: test.c
-	i386-aout-gcc -DINVOKE_GP -o $@ -O0 -nostdlib -nostartfiles -c test.c -save-temps
+	i386-aout-gcc -DINVOKE_GP -o $@ $(AOUT_CFLAGS) -c $< -save-temps
 
 mymain.o: mymain.c
 	i386-aout-gcc -c $<
@@ -95,6 +113,7 @@ install: all
 	dd if=boot.bin of=/dev/fd0
 	mount /mnt/floppy
 	cp -f hello /mnt/floppy
+	cp -f start.out /mnt/floppy
 	cp -f test.out /mnt/floppy
 	cp -f gp.out /mnt/floppy
 	umount /mnt/floppy
@@ -104,7 +123,7 @@ image: all
 	dd if=/dev/zero of=image bs=512 count=2880
 	chmod +x image
 	dd if=boot.bin of=image bs=512 count=1 conv=notrunc
-	mcopy -i image hello test.out gp.out ::
+	mcopy -i image hello start.out test.out gp.out ::
 
 
 emu: image

@@ -46,16 +46,20 @@ ulong CurPID;     // PID, который будет присвоен очередному
 // до вызова этой функции.
 void init_scheduler()
 {
+   printf_color(0x0b, "Starting scheduler...\t\t"FLGREEN"%dHz\n", CFG_SCHED_HZ);
+
    // Устанавливаем задержку PIT-таймера
    outb(36, 0x43);
    outb(TIMER_VALUE & 0xff, 0x40);
    outb(TIMER_VALUE >> 8, 0x40);
 
    // Все остальное для первой задачи уже сделано
-   Task[0]->pid = 0;
-   CurPID = 1;
+//   Task[0]->pid = 0;
+//   CurPID = 1;
+   CurPID = 0;
    Current = 0;
-   NTasks = 1;
+//   NTasks = 1;
+   NTasks = 0;
 }
 
 
@@ -64,54 +68,46 @@ void init_scheduler()
 // содержащие его каталог страниц и TSS
 void scheduler_kill(ulong pid)
 {
-      ulong i;
-      for (i = 0; i < NTasks; i++)
+   ulong i;
+   for (i = 0; i < NTasks; i++)
+   {
+      if (Task[i]->pid == pid)
       {
-         if (Task[i]->pid == pid)
-         {
-            if (pid == 0)
-               // Главная задача пока обрабатывается особенным образом: у нее CPL=0,
-               // для нее смаппированы все 8Mb памяти, в т.ч. и нераспределяемая, и проч.
-               // Поэтому мы ее чистить пока не будем.
-               printf_color(0x4, "Freeing of main process is not implemented yet\n");
-            else
+         uint pagecount = 0;
+         TaskStruct* task = Task[i];
+         int j, k;
+         // Проходим по каталогу страниц задачи и ищем непустые записи
+         // Для каждой записи проходим по соответствующей таблице страниц
+         // и освобождаем выделенные страницы. По пути считаем их количество.
+         ulong *pg_dir = (ulong*)(task->tss.cr3 & 0xfffff000);
+         for (j = 0; j < 512; j++)
+            if ((ulong)pg_dir[j] & 0x1)
             {
-               uint pagecount = 0;
-               TaskStruct* task = Task[i];
-               int j, k;
-               // Проходим по каталогу страниц задачи и ищем непустые записи
-               // Для каждой записи проходим по соответствующей таблице страниц
-               // и освобождаем выделенные страницы. По пути считаем их количество.
-               ulong *pg_dir = (ulong*)(task->tss.cr3 & 0xfffff000);
-               for (j = 0; j < 512; j++)
-                  if ((ulong)pg_dir[j] & 0x1)
+               for (k = 0; k < 1024; k++)
+                  if (((ulong*)(pg_dir[j]&0xfffff000))[k] & 1)
                   {
-                     for (k = 0; k < 1024; k++)
-                        if (((ulong*)(pg_dir[j]&0xfffff000))[k] & 1)
-                        {
-                           pagecount++;
-                           free_page(((ulong*)(pg_dir[j]&0xfffff000))[k]);
-                        }
                      pagecount++;
-                     free_page((pg_dir[j]&0xfffff000));
+                     free_page(((ulong*)(pg_dir[j]&0xfffff000))[k]);
                   }
-               pagecount+=2;
-               free_page(task->tss.cr3);
-               free_page((ulong)task);
-
-               printf_color(0x4, "\n%d pages freed\n", pagecount);
+               pagecount++;
+               free_page((pg_dir[j]&0xfffff000));
             }
+         pagecount+=2;
+         free_page(task->tss.cr3);
+         free_page((ulong)task);
 
-            if (NTasks <= 1) // Система осталась без процессов :(
-               return panic("Heh... Last process has died...\n");
-            Task[i] = Task[NTasks-1];
-            NTasks--;
-            if (Current >= NTasks) Current = 0;
-            // Вызываем смену задачи, на случай, если убили текущий процесс
-            __asm__("int $0x8"); // Над этим надо еще подумать
-            return;
-         }
+         printf_color(0x4, "\n%d pages freed\n", pagecount);
+
+         if (NTasks <= 1) // Система осталась без процессов :(
+            return panic("Heh... Last process has died...\n");
+         Task[i] = Task[NTasks-1];
+         NTasks--;
+         if (Current >= NTasks) Current = 0;
+         // Вызываем смену задачи, на случай, если убили текущий процесс
+         __asm__("int $0x8"); // Над этим надо еще подумать
+         return;
       }
+   }
 }
 
 // Убить текущую задачу. Вызывается из обработчиков #GP, #PF и др.

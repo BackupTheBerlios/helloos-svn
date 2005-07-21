@@ -46,18 +46,11 @@
 #define IOM    0x64
 
 
-// Селектор TSS'а первой задачи
-#define MAIN_TSS 0x28
-
 // Смещение конца syscall_stack в TaskStruct
 #define END_OF_SYSCALL_STACK 0x100
 
-// Селектор TSS'а игнорирования прерывания
-#define II_TSS 0x30
 // Селектор TSS'а планировщика
-#define IRQ0_TSS 0x38
-// Селектор TSS'а обработчика irq6
-#define IRQ6_TSS 0x40
+#define IRQ0_TSS 0x28
 
 // Селектор кода ядра
 #define KERNEL_CS 0x08

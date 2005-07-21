@@ -31,11 +31,13 @@ COMPILING HelloOS
       To compile both the bootsector and the kernel just type:
          $ make depend
          $ make
-      In result you'll receive these files: "boot.bin", "hello"
-      and several "*.out" files. "boot.bin" is the bootsector for
-      FAT12-floppy. "hello" is the kernel. "*.out" files are
-      binaries in a.out-format. These files can be runned with
-      'exe <filename>' console command under HelloOS
+      In result you'll receive these files:
+         * boot.bin     - bootsector for FAT12-floppy
+         * hello        - HelloOS' kernel
+         * start.out    - main() function ;) (like init in linux)
+         * test.out, gp.out   - demo binaries in a.out-format, can
+                                 be runned with 'exe <filename>'
+                                 console command under HelloOS
 
       If you will not run 'make depend' it'll compile anyway but
       there is can be some warnings.
@@ -99,7 +101,7 @@ These commands are supported in the console:
                   Main process will be killed after it.
 
    * fat       -  invokes the simple FAT browser. It is no way
-                  to leave it.
+                  to leave it. (*disabled in this version*)
 
    * dbg       -  invokes the debugger when running under Bochs
 

@@ -121,12 +121,16 @@ void fd_wait_for_int()
 // Иницилизация контроллера и драйвера
 void fd_init()
 {
+   puts_color("Starting FD driver...", 0x0b);
 #if (CFG_FD_READ_CACHE == 1)
    // Иницилизируем кольцевую кэш-очередь
    uint i;
    for (i = 0; i < CFG_FD_READ_CACHE_SIZE; i++)
       fd_cache[i].LBA = -1;
    fd_cache_pos = 0;
+   printf_color(0x0a, "\t\t%dKb cache\n", CFG_FD_READ_CACHE_SIZE/2);
+#else
+   puts_color(0x0a, "\tno cache\n");
 #endif
 
    fd_clear_int_flag();

@@ -66,7 +66,7 @@ struct _TaskStruct
    ulong pid;
 
    // Этот массив будет служить стеком для системных вызовов
-   uchar syscall_stack[1024];
+   uchar syscall_stack[3024];
 };
 
 

@@ -17,8 +17,8 @@
 #include "types.h"
 #include "hello_stdarg.h"
 
-extern int lines, cols;                // количество линий и строк на экране
-extern int curr_x,curr_y;              // текущее положение курсора
+#include "colors.h"
+
 
 // Иницилизация
 void scrio_init(int cur_x, int cur_y);

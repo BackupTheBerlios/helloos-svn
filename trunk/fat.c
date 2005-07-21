@@ -564,20 +564,10 @@ ulong FindEntry(ulong DirCluster, char *Name83, DirEntry *EntryBuf)
 // Иницилизация драйвера
 void fat_init()
 {
+   puts_color("Starting FAT driver...", 0x0b);
+
    LoadSectorsFromDisk(0, 1, &bpbSector);
    bpb = (FAT_BPB*)bpbSector;
-
-   {
-      ushort Sig;
-      Sig = bpbSector[511];
-      Sig *= 256;
-      Sig += bpbSector[510];
-      if (Sig != 0xAA55)
-      {
-         puts("0xAA55 signature is NOT OK\n");
-         return;
-      }
-   }
 
 
    RootDirSectors = ((bpb->RootEntCnt * 32) + (bpb->BytsPerSec - 1)) / bpb->BytsPerSec;
@@ -613,10 +603,15 @@ void fat_init()
    else
       FirstRootDirSecNum = bpb->Tail32.RootClus;
 
-   puts("Hmm... this is FAT");
-   if (Type == FAT12) puts("12... ");
-   if (Type == FAT16) puts("16... ");
-   if (Type == FAT32) puts("32... ");
+   puts_color("\t\tFAT", 0x0a);
+   if (Type == FAT12) puts_color("12", 0x0a);
+   if (Type == FAT16) puts_color("16", 0x0a);
+   if (Type == FAT32) puts_color("32", 0x0a);
+
+   if (*(ushort*)(&bpbSector[510]) != 0xAA55)
+      puts_color(" (bad signature)", 0x0c);
+
+   puts("\n");
 }
 
 
