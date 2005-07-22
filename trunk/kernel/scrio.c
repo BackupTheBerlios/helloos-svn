@@ -10,11 +10,11 @@
  */
 
 
-#include "types.h"
-#include "io.h"
-#include "hello_stdio.h"
-#include "hello_string.h"
-#include "hello_stdarg.h"
+#include <helloos/types.h>
+#include <helloos/io.h>
+#include <helloos/scrio.h>
+#include <string.h>
+#include <stdarg.h>
 
 
 

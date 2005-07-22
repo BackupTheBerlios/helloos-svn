@@ -13,7 +13,7 @@
 #ifndef __USER_SYSCALLS_H
 #define __USER_SYSCALLS_H
 
-#include "types.h"
+#include <helloos/types.h>
 
 
 // Макросы для объявления клиентских заглушек к

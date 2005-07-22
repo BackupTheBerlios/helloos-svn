@@ -13,7 +13,7 @@
 #define __SCHEDULER_H
 
 
-#include "types.h"
+#include <helloos/types.h>
 
 // Эта структура будет хранить TSS задачи. Это лучше чем
 // uchar TSS[104], т.к. мы сможем из С-кода трогать чужие

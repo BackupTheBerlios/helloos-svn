@@ -12,7 +12,7 @@
 #define __PAGER_H
 
 
-#include "types.h"
+#include <helloos/types.h>
 
 void pager_init();
 

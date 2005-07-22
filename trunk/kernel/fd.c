@@ -28,13 +28,13 @@
  */
 
 
-#include "config.h"
-#include "types.h"
-#include "io.h"
-#include "fd.h"
-#include "panic.h"
-#include "hello_stdio.h"
-#include "hello_string.h"
+#include <config.h>
+#include <helloos/types.h>
+#include <helloos/io.h>
+#include <helloos/fd.h>
+#include <helloos/panic.h>
+#include <helloos/scrio.h>
+#include <string.h>
 
 
 
@@ -128,9 +128,9 @@ void fd_init()
    for (i = 0; i < CFG_FD_READ_CACHE_SIZE; i++)
       fd_cache[i].LBA = -1;
    fd_cache_pos = 0;
-   printf_color(0x0a, "\t\t%dKb cache\n", CFG_FD_READ_CACHE_SIZE/2);
+   printf_color(0x0a, "\t\t%dKb sector cache\n", CFG_FD_READ_CACHE_SIZE/2);
 #else
-   puts_color(0x0a, "\tno cache\n");
+   puts_color(0x0a, "\tno sector cache\n");
 #endif
 
    fd_clear_int_flag();

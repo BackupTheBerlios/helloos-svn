@@ -20,12 +20,12 @@
 
 
 
-#include "io.h"
-#include "fat.h"
-#include "fd.h"
-#include "hello_stdio.h"
-#include "hello_string.h"
-#include "types.h"
+#include <helloos/io.h>
+#include <helloos/fat.h>
+#include <helloos/fd.h>
+#include <helloos/scrio.h>
+#include <string.h>
+#include <helloos/types.h>
 
 
 
@@ -609,7 +609,9 @@ void fat_init()
    if (Type == FAT32) puts_color("32", 0x0a);
 
    if (*(ushort*)(&bpbSector[510]) != 0xAA55)
-      puts_color(" (bad signature)", 0x0c);
+      puts_color(" (bad signature!)", 0x0c);
+
+   printf_color(0x0a, ", %d clusters", CountofClusters);
 
    puts("\n");
 }

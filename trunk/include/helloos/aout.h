@@ -15,7 +15,7 @@
 #ifndef __AOUT_H
 #define __AOUT_H
 
-#include "types.h"
+#include <helloos/types.h>
 
 
 typedef struct

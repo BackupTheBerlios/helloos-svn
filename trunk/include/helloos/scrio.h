@@ -14,10 +14,10 @@
 #define __HELLO_STDIO_H
 
 
-#include "types.h"
-#include "hello_stdarg.h"
+#include <helloos/types.h>
+#include <stdarg.h>
 
-#include "colors.h"
+#include <helloos/colors.h>
 
 
 // Иницилизация

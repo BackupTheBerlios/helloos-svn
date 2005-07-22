@@ -15,13 +15,13 @@
  */
 
 
-#include "types.h"
-#include "config.h"
+#include <helloos/types.h>
+#include <config.h>
 
-#include "hello_string.h"
-#include "hello_stdio.h"
-#include "io.h"
-#include "panic.h"
+#include <string.h>
+#include <helloos/scrio.h>
+#include <helloos/io.h>
+#include <helloos/panic.h>
 
 // Количество распределяемых страниц
 #define PAGES_NR     (CFG_MEM_SIZE-CFG_LOW_MEM)

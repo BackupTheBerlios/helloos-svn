@@ -13,17 +13,16 @@
 
 
 
-#include "io.h"
-#include "types.h"
-#include "version.h"
-#include "fd.h"
-#include "hello_string.h"
-#include "colors.h"
-#include "fat.h"
+#include <helloos/io.h>
+#include <helloos/types.h>
+#include <helloos/fd.h>
+#include <string.h>
+#include <helloos/colors.h>
+#include <helloos/fat.h>
 
-#include "hello_stdarg.h"
+#include <stdarg.h>
 
-#include "user_syscalls.h"
+#include <helloos/user_syscalls.h>
 
 // Реализация стандартного snprintf
 // Сейчас поддерживаются форматы: c, d, p, s, u, x
@@ -470,7 +469,7 @@ void command(char *cmd)
 
 static char cmd[100];   // Буфер ввода
 
-int start_my_kernel()
+int main()
 {
 // Иницилизация экранного ввода/вывода
 // При этом считывается предусмотрительно сохраненные координаты курсора

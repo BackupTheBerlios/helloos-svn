@@ -14,16 +14,16 @@
  */
 
 
-#include "head.h"
+#include <helloos/head.h>
 
 // Начинаем секцию кода
 .text
 
 // Делает эту метку глобальной
-.global startup_32
+.global HelloWorld
 
 
-startup_32:
+HelloWorld:
 
 // Иницилизация. Запрещаем прерывания и заполняем
 // сегментные регистры.

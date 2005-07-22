@@ -13,7 +13,7 @@
 #define __FD_H
 
 
-#include "types.h"
+#include <helloos/types.h>
 
 
 // Константы, определяющие адреса портов флоппи-контроллера

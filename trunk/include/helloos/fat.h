@@ -13,7 +13,7 @@
 #define __FAT_H
 
 
-#include "types.h"
+#include <helloos/types.h>
 
 
 // Содержимое каталога составлено их таких

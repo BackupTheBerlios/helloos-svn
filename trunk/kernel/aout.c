@@ -27,17 +27,17 @@
 
 
 
-#include "hello_stdio.h"
-#include "hello_string.h"
-#include "types.h"
-#include "fat.h"
-#include "pager.h"
-#include "scheduler.h"
-#include "config.h"
-#include "head.h"
-#include "io.h"
+#include <helloos/scrio.h>
+#include <string.h>
+#include <helloos/types.h>
+#include <helloos/fat.h>
+#include <helloos/pager.h>
+#include <helloos/scheduler.h>
+#include <config.h>
+#include <helloos/head.h>
+#include <helloos/io.h>
 
-#include "aout.h"
+#include <helloos/aout.h>
 
 
 

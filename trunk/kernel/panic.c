@@ -15,8 +15,8 @@
  *
  */
 
-#include "types.h"
-#include "hello_stdio.h"
+#include <helloos/types.h>
+#include <helloos/scrio.h>
 
 void panic(char *msg)
 {

@@ -11,12 +11,12 @@
  */
 
 
-#include "types.h"
-#include "hello_stdio.h"
-#include "panic.h"
-#include "scheduler.h"
-#include "aout.h"
-#include "io.h"
+#include <helloos/types.h>
+#include <helloos/scrio.h>
+#include <helloos/panic.h>
+#include <helloos/scheduler.h>
+#include <helloos/aout.h>
+#include <helloos/io.h>
 
 
 // Указатель на syscall

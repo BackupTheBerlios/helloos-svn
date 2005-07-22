@@ -10,18 +10,18 @@
  *
  */
 
-#include "types.h"
-#include "io.h"
-#include "panic.h"
-#include "config.h"
-#include "scheduler.h"
-#include "head.h"
+#include <helloos/types.h>
+#include <helloos/io.h>
+#include <helloos/panic.h>
+#include <config.h>
+#include <helloos/scheduler.h>
+#include <helloos/head.h>
 
-#include "hello_stdio.h"
-#include "hello_string.h"
+#include <helloos/scrio.h>
+#include <string.h>
 
-#include "fat.h"
-#include "pager.h"
+#include <helloos/fat.h>
+#include <helloos/pager.h>
 
 
 // Код для PIT-таймера. См. доки.
@@ -46,7 +46,7 @@ ulong CurPID;     // PID, который будет присвоен очередному
 // до вызова этой функции.
 void init_scheduler()
 {
-   printf_color(0x0b, "Starting scheduler...\t\t"FLGREEN"%dHz\n", CFG_SCHED_HZ);
+   printf_color(0x0b, "Starting scheduler...\t\t"FLGREEN"%dHz switching frequency\n", CFG_SCHED_HZ);
 
    // Устанавливаем задержку PIT-таймера
    outb(36, 0x43);

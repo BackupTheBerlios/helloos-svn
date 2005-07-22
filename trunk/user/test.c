@@ -10,8 +10,8 @@
  */
 
 
-#include "types.h"
-#include "user_syscalls.h"
+#include <helloos/types.h>
+#include <helloos/user_syscalls.h>
 
 // Заглушки системных вызовов. Разумеется,
 // потом они будут в пользовательских заголовках.
