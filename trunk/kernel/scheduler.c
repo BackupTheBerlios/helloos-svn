@@ -104,7 +104,7 @@ void scheduler_kill(ulong pid)
          NTasks--;
          if (Current >= NTasks) Current = 0;
          // Вызываем смену задачи, на случай, если убили текущий процесс
-         __asm__("int $0x8"); // Над этим надо еще подумать
+         CALL_SCHEDULER; // Над этим надо еще подумать
          return;
       }
    }

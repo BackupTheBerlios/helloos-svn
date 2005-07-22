@@ -36,8 +36,7 @@ VER_ALPHA = f
 .EXPORT_ALL_VARIABLES:
 
 CFLAGS = -O2 -ffreestanding -W -Wall -save-temps -I./include/ -I../include/ -I./config/ -I../config/ \
-			-DVER_MAJOR=$(VER_MAJOR) -DVER_MINOR=$(VER_MINOR) -DVER_ALPHA=\'$(VER_ALPHA)\'
-# -Werror
+			-DVER_MAJOR=$(VER_MAJOR) -DVER_MINOR=$(VER_MINOR) -DVER_ALPHA=\'$(VER_ALPHA)\' -Werror
 AOUT_CFLAGS = -nostdlib -nostartfiles $(CFLAGS)
 
 
@@ -63,7 +62,7 @@ image: subdirs
 
 
 install: subdirs
-	dd if=boot.bin of=/dev/fd0
+	dd if=boot/boot.bin of=/dev/fd0
 	mount /mnt/floppy
 	cp -f $(FILES) /mnt/floppy
 	umount /mnt/floppy

@@ -27,19 +27,19 @@ HelloWorld:
 
 // Иницилизация. Запрещаем прерывания и заполняем
 // сегментные регистры.
-cli
-movl $KERNEL_DS, %eax
-mov %ax, %ds
-mov %ax, %es
-mov %ax, %fs
-mov %ax, %gs
-mov %ax, %ss
-mov $0x30000, %esp
+   cli
+   movl $KERNEL_DS, %eax
+   mov %ax, %ds
+   mov %ax, %es
+   mov %ax, %fs
+   mov %ax, %gs
+   mov %ax, %ss
+   mov $0x30000, %esp
 
 
 // Чистим флаги
-pushl $0
-popfl
+   pushl $0
+   popfl
 
 // Инициализируем консольный ввод/вывод
    xor %eax, %eax
@@ -54,6 +54,10 @@ popfl
    push $woow_msg
    call puts
    add $4, %esp
+
+
+
+   call irq_init
 
 
 
@@ -226,7 +230,7 @@ rp_sidt:
 
 // Записываем обработчик IRQ6 - на IRQ6
 // Используем interrupt-gate
-   mov $idt+0xe*8, %edi
+   mov $idt+(IRQ0_INT+6)*8, %edi
    mov $irq6_int, %edx
    movw %dx,      0(%edi)
    movw $KERNEL_CS, 2(%edi)
@@ -262,13 +266,13 @@ rp_sidt:
 // переназначу дискетное IRQ6 на другое прерывание. Т.к.
 // пока мне это делать лень, то пока у нас #PF будет вызывать
 // прерывание как дискета ;)
-//   mov $idt+0x0e*8, %edi
-//   mov $pf_fault, %edx
-//   movw %dx,      0(%edi)
-//   movw $0x0008,  2(%edi)
-//   movw $0xef00,  4(%edi)
-//   shr $16, %edx
-//   movw %dx,      6(%edi)
+   mov $idt+0x0e*8, %edi
+   mov $pf_fault, %edx
+   movw %dx,      0(%edi)
+   movw $0x0008,  2(%edi)
+   movw $0xef00,  4(%edi)
+   shr $16, %edx
+   movw %dx,      6(%edi)
 
 
 
@@ -276,8 +280,7 @@ rp_sidt:
    call init_scheduler
 
 
-// Да будет свет!
-   sti
+   sti   // Да будет свет!
 
    call fd_init
    call fat_init
@@ -294,7 +297,7 @@ rp_sidt:
 // Записываем планировщик как обработчик IRQ0
 // Раньше этого нельзя было сделать, т.к. он сразу
 // попытался бы переключится на отсутствующую задачу
-   mov $idt+0x8*8, %edi   // IRQ0 = int 0x8
+   mov $idt+IRQ0_INT*8, %edi
    movw $0x0000,  0(%edi)
    movw $IRQ0_TSS,2(%edi)
    movw $0x8500,  4(%edi)
@@ -302,7 +305,7 @@ rp_sidt:
 
    // Уффф... Все!..
    // Переключаемся на главную задачу вызывая планировщик
-   int $0x8
+   int $IRQ0_INT
 
 
 startfilename:

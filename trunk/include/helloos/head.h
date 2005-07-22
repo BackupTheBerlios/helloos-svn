@@ -63,5 +63,10 @@
 #define USER_DS 0x23
 
 
+// На эти значения мы будем переназначать IRQ
+#define IRQ0_INT  0x20
+#define IRQ8_INT  0x28
+
+
 
 #endif // __HEAD_H

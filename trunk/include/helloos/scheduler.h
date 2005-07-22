@@ -14,6 +14,8 @@
 
 
 #include <helloos/types.h>
+#include <helloos/io.h>
+#include <helloos/head.h>
 
 // Эта структура будет хранить TSS задачи. Это лучше чем
 // uchar TSS[104], т.к. мы сможем из С-кода трогать чужие
@@ -69,6 +71,10 @@ struct _TaskStruct
    uchar syscall_stack[3024];
 };
 
+
+// Вызывает прерывание таймера. Используется для принудительного
+// вызова планировщика
+#define CALL_SCHEDULER     call_int(IRQ0_INT)
 
 
 // Иницилизация многозадачности

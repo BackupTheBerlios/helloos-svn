@@ -23,21 +23,22 @@ int main()
 //   mysys_nputs_color("I'm alive!\n", -1, 0xc);
 
    // И мигаем им до посинения
+#define INVOKE_PF
 #ifdef INVOKE_GP
-   uint counter = 10000;
+   uint gp_counter = 10000;
 #endif
 #ifdef INVOKE_PF
-   uint counter = 10000;
+   uint pf_counter = 10000;
 #endif
    while (1)
    {
       mysys_incvideochar(myaddr);
 #ifdef INVOKE_GP
-      if (! counter--)
+      if (! gp_counter--)
          *(uchar*)(0xc0000000) = 5;
 #endif
 #ifdef INVOKE_PF
-      if (! counter--)
+      if (! pf_counter--)
          *(uchar*)(0x70000000) = 5;
 #endif
    }

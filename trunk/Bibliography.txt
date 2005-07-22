@@ -38,3 +38,7 @@
 
 [9] OpenBSD Programmer's Manual: a.out binary format
       June 5, 1993
+
+[10] Write Your Own Operating System (FAQ)
+      Stuart 'Dark Fiber' George
+      October 23, 2000
