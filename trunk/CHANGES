@@ -5,6 +5,13 @@
   $Id$
 
 
+
+CHANGES IN 0.0g:
+
+   * Demand loading of binary files is implemented
+
+
+
 CHNAGES IN 0.0e:
 
    * All code in start.c now removed from the kernel and placed in 'start.out'

@@ -36,6 +36,7 @@
 #include <config.h>
 #include <helloos/head.h>
 #include <helloos/io.h>
+#include <helloos/panic.h>
 
 #include <helloos/aout.h>
 
@@ -103,11 +104,8 @@ void aout_info(char *Name)
 }
 
 
-extern ulong CurPID; // Гадость, я знаю :(
-extern ushort NTasks;
-extern TaskStruct *Task[CFG_SCHED_MAX_TASK];
-
 // Запуск файла, заданного именем
+#define USER_STACK_PAGES      1
 void aout_load(char *Name)
 {
    char name83[11];
@@ -139,42 +137,42 @@ void aout_load(char *Name)
    ushort DataPages = (exec.a_data + 0xfff) / 0x1000;
    ushort  BSSPages = (exec.a_bss  + 0xfff) / 0x1000;
 
-   ulong *pg_dir, *pg0;
+   ulong *pg_dir;//, *pg0;
    pg_dir   = (ulong*)alloc_first_page();
-   pg0      = (ulong*)alloc_first_page();
+//   pg0      = (ulong*)alloc_first_page();
 
    memset(pg_dir, 0, 0x1000);
-   memset(pg0   , 0, 0x1000);
-   pg_dir[0]      = (ulong)pg0 + 0x7;
+//   memset(pg0   , 0, 0x1000);
+//   pg_dir[0]      = (ulong)pg0 + 0x7;
    pg_dir[0x200]  = 0x3000 + 0x7;
    pg_dir[0x201]  = 0x4000 + 0x7;
 
-   int i;
-   ulong pg;
-   for (i = 0; i < TextPages; i++)
-   {
-      pg = alloc_first_page();
-      LoadPart(&Entry, (void*)pg, N_TXTOFF(exec)+i*0x1000, 0x1000);
-      pg0[i] = pg + 0x7;
-   }
-   // Я надеюсь, что хотя бы размеры секций выровнены по страницам
-   for (i = 0; i < DataPages; i++)
-   {
-      pg = alloc_first_page();
-      LoadPart(&Entry, (void*)pg, N_DATOFF(exec)+i*0x1000, 0x1000);
-      pg0[TextPages+i] = pg + 0x7;
-   }
-   for (i = 0; i < BSSPages; i++)
-   {
-      pg = alloc_first_page();
-      memset((void*)pg, 0, 0x1000); // В доке [8] сказано занулять
-      pg0[TextPages+DataPages+i] = pg + 0x7;
-   }
+ //  int i;
+ //  ulong pg;
+ //  for (i = 0; i < TextPages; i++)
+ //  {
+ //     pg = alloc_first_page();
+ //     LoadPart(&Entry, (void*)pg, N_TXTOFF(exec)+i*0x1000, 0x1000);
+ //     pg0[i] = pg + 0x7;
+ //  }
+ //  // Я надеюсь, что хотя бы размеры секций выровнены по страницам
+ //  for (i = 0; i < DataPages; i++)
+ //  {
+ //     pg = alloc_first_page();
+ //     LoadPart(&Entry, (void*)pg, N_DATOFF(exec)+i*0x1000, 0x1000);
+ //     pg0[TextPages+i] = pg + 0x7;
+ //  }
+ //  for (i = 0; i < BSSPages; i++)
+ //  {
+ //     pg = alloc_first_page();
+ //     memset((void*)pg, 0, 0x1000); // В доке [8] сказано занулять
+ //     pg0[TextPages+DataPages+i] = pg + 0x7;
+ //  }
 
    // FIXME: Для стека выделяется одна отдельная страница
-   ulong pg_stack = alloc_first_page();
-   ulong user_stack_page = (TextPages+DataPages+BSSPages) * 0x1000;
-   pg0[TextPages+DataPages+BSSPages] = pg_stack + 0x7;
+//   ulong pg_stack = alloc_first_page();
+   //ulong user_stack_top = (TextPages+DataPages+BSSPages) * 0x1000 ;  // FIXME: Какого размера делать стек для a.out?
+//   pg0[TextPages+DataPages+BSSPages] = pg_stack + 0x7;
 
 
 
@@ -188,6 +186,8 @@ void aout_load(char *Name)
 
    task->pid = CurPID++;
    task->tsss = tssn << 3;
+   memcpy(&task->file, &Entry, sizeof(DirEntry));
+   memcpy(&task->header, &exec, sizeof(Exec));
 
    task->tss.tl = 0;
    task->tss.esp0 = (ulong)&task->syscall_stack + sizeof(task->syscall_stack); // Стек для системных вызовов
@@ -199,7 +199,7 @@ void aout_load(char *Name)
    task->tss.eax = task->tss.ebx =
       task->tss.ecx = task->tss.edx =
       task->tss.esi = task->tss.edi = 0;
-   task->tss.esp = task->tss.ebp = user_stack_page-4;
+   task->tss.esp = task->tss.ebp = (TextPages+DataPages+BSSPages + USER_STACK_PAGES)*0x1000 - 4;
    task->tss.cs = USER_CS;
    task->tss.es = task->tss.ss =
       task->tss.ds = task->tss.fs =
@@ -219,4 +219,81 @@ void aout_load(char *Name)
 
    Task[NTasks] = task;
    NTasks++;
+}
+
+
+extern inline void memcpy_to_user(void *dest, void *src, uint n)
+{
+   __asm__(
+         "push %%es\n"
+         "push %%gs\n"
+         "pop %%es\n"
+         "movl %0, %%edi\n"
+         "movl %1, %%esi\n"
+         "cld\n"
+         "rep movsb\n"
+         "pop %%es\n"
+         ::"m"(dest), "m"(src), "c"(n):"di", "si");
+}
+
+void pf_handler(uint address, uint errcode)
+{
+//   printf_color(0x04, "Page Fault: addr=0x%x, errcode=0x%x\n", address, errcode);
+
+   uchar ok = 0; // Set with 1 if PF is successfully handled
+
+
+   if ((errcode & 1) == 0)
+   {
+      TaskStruct *task = Task[Current];
+      uint filepages = task->header.a_text + task->header.a_data;
+      uint maxpage = filepages + ((task->header.a_bss + 0xfff) & 0xfffff000) + USER_STACK_PAGES * 0x1000;
+
+
+      ulong pageaddr = address & 0xfffff000;
+      ulong *tmppage = 0;
+
+      if (address < filepages)   // text or data page
+      {
+         tmppage = (ulong*)alloc_first_page();
+         LoadPart(&task->file, tmppage, pageaddr+N_TXTOFF(task->header), 0x1000);
+
+         ok = 1;
+      }
+
+      if (address >= filepages && address < maxpage)   // bss or stack page
+      {
+         tmppage = (ulong*)alloc_first_page();
+         memset(tmppage, 0, 0x1000);
+
+         ok = 1;
+      }
+
+      if (ok)
+      {
+         ulong *pg_dir = (ulong*)task->tss.cr3;
+         ulong *pg;
+         if ((pg_dir[address>>22] & 1) == 0)
+         {
+            pg = (ulong*)alloc_first_page();
+//            printf("New page table allocated (0x%x)\n", pg);
+            memset(pg, 0, 0x1000);
+            pg_dir[address>>22] = (ulong)pg + 0x7;
+         }
+         else
+            pg = (ulong*)(pg_dir[address>>22] & 0xfffff000);
+
+         pg[(address>>12) & 0x3ff] = (ulong)tmppage + 0x7;
+         __asm__("mov %%eax, %%cr3\n"
+               ::"a"(task->tss.cr3));
+      }
+   }
+
+   if (! ok)
+   {
+      printf_color(0x04, "Process wants too many (req addr=0x%x)! Killing him...\n", address);
+      scheduler_kill_current();
+   }
+//   else
+//      printf_color(0x0a, "ok\n");
 }

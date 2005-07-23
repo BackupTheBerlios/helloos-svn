@@ -481,6 +481,15 @@ gp_str:
 .global pf_fault
 .align 2
 pf_fault:
+   push %ds    // 7
+   push %es    // 6
+   push %fs    // 5
+   push %gs    // 4
+   push %edx   // 3
+   push %ecx   // 2
+   push %ebx   // 1
+   push %eax   // 0
+
    mov $KERNEL_DS, %ebx
    mov %ebx, %ds
    mov %ebx, %es
@@ -488,13 +497,27 @@ pf_fault:
    mov $USER_DS, %ebx
    mov %ebx, %gs
 
+   mov 8*4(%esp), %eax
 
-   push $pf_str
-   call printf
+   push %eax
+   mov %cr2, %eax
+   push %eax
+
+   call pf_handler
+   add $8, %esp
+
+   
+   pop %eax
+   pop %ebx
+   pop %ecx
+   pop %edx
+   pop %gs
+   pop %fs
+   pop %es
+   pop %ds
    add $4, %esp
 
-
-   call scheduler_kill_current
+   iret
 
 
 pf_str:

@@ -16,6 +16,9 @@
 #include <helloos/types.h>
 #include <helloos/io.h>
 #include <helloos/head.h>
+#include <helloos/fat.h>
+#include <helloos/aout.h>
+#include <config.h>
 
 // Эта структура будет хранить TSS задачи. Это лучше чем
 // uchar TSS[104], т.к. мы сможем из С-кода трогать чужие
@@ -67,6 +70,11 @@ struct _TaskStruct
    // Идентификатор
    ulong pid;
 
+   // Дескриптор файла. Нужен для demand-loading.
+   DirEntry file;
+   // Заголовок a.out
+   Exec header;
+
    // Этот массив будет служить стеком для системных вызовов
    uchar syscall_stack[3024];
 };
@@ -84,10 +92,17 @@ void init_scheduler();
 void scheduler_dbg(ulong addr);
 
 
+// Переменные, полезные другим модулям
+extern TaskStruct *Task[CFG_SCHED_MAX_TASK];
+extern ulong NTasks;    // Текущее количество живых процессов
+extern ulong Current;   // Номер текущего процесса в массиве Task
+extern ulong CurPID;     // PID, который будет присвоен очередному
+
 
 // ТЕСТОВЫЕ ФУНКЦИИ
 void scheduler_ps();
 void scheduler_kill(ulong pid);
+void scheduler_kill_current();
 void scheduler_pages(ulong pid);
 
 
