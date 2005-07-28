@@ -30,17 +30,15 @@
 
 VER_MAJOR = 0
 VER_MINOR = 0
-VER_ALPHA = g
+VER_ALPHA = h
 
 
 .EXPORT_ALL_VARIABLES:
 
-CFLAGS = -O2 -ffreestanding -W -Wall -save-temps -I./include/ -I../include/ -I./config/ -I../config/ \
+INCLUDES = -I../include -I../config
+CFLAGS = -O2 -nostdlib -ffreestanding -W -Wall -save-temps $(INCLUDES) \
 			-DVER_MAJOR=$(VER_MAJOR) -DVER_MINOR=$(VER_MINOR) -DVER_ALPHA=\'$(VER_ALPHA)\' -Werror
-AOUT_CFLAGS = -nostdlib -nostartfiles $(CFLAGS)
-
-
-SUBDIRS = boot lib kernel start user
+AOUT_CFLAGS = $(CFLAGS)
 
 
 all: image
@@ -48,11 +46,16 @@ all: image
 new: clean all
 
 
-subdirs:
-	set -e ; for i in $(SUBDIRS); do make -C $$i; done
+SUBDIRS = boot lib kernel start user
+
+.PHONY: clean install emu qemu subdirs
+
+subdirs: 
+	set -e; for i in $(SUBDIRS); do make -C $$i; done
 
 
-FILES = kernel/hello start/start.out user/test.out user/gp.out
+
+FILES = kernel/hello start/start user/test.elf user/gp.elf user/pf.elf user/et.elf
 
 image: subdirs
 	dd if=/dev/zero of=image bs=512 count=2880
@@ -78,6 +81,8 @@ qemu: image
 clean:
 	for i in $(SUBDIRS); do make -C $$i clean; done
 	rm -f image *~
+	rm -f include/*~
+	rm -f include/helloos/*~
 
 depend:
 	for i in $(SUBDIRS); do make -C $$i depend; done

@@ -15,7 +15,7 @@
 #include <helloos/scrio.h>
 #include <helloos/panic.h>
 #include <helloos/scheduler.h>
-#include <helloos/aout.h>
+#include <helloos/binfmt.h>
 #include <helloos/io.h>
 
 
@@ -38,8 +38,8 @@ uint sys_ps();
 uint sys_kill(uint pid);
 uint sys_pages(uint pid);
 
-uint sys_info(char *filename);
-uint sys_load(char *filename);
+uint sys_bin_info(char *filename);
+uint sys_bin_load(char *filename);
 
 uint sys_dbg();
 
@@ -53,8 +53,8 @@ syscall_ptr syscall_table[] = {
    (syscall_ptr)sys_panic,
    (syscall_ptr)sys_ps,
    (syscall_ptr)sys_kill,
-   (syscall_ptr)sys_info,
-   (syscall_ptr)sys_load,
+   (syscall_ptr)sys_bin_info,
+   (syscall_ptr)sys_bin_load,
    (syscall_ptr)sys_pages,
    (syscall_ptr)sys_dbg,
 };
@@ -186,19 +186,21 @@ uint sys_kill(uint pid)
    return 0;
 }
 
-uint sys_info(char *filename)
+uint sys_bin_info(char *filename)
 {
    char localbuf[256];
    strncpy_from_user(localbuf, filename, 256);
-   aout_info(localbuf);
+   if (!bin_dump_info(localbuf))
+      printf("Cannot read binary\n");
    return 0;
 }
 
-uint sys_load(char *filename)
+uint sys_bin_load(char *filename)
 {
    char localbuf[256];
    strncpy_from_user(localbuf, filename, 256);
-   aout_load(localbuf);
+   if (!bin_load_bin(localbuf))
+      printf("Cannot load binary\n");
    return 0;
 }
 

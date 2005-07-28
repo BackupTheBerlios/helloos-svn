@@ -1,4 +1,4 @@
-OBJS = head.o irq.o scheduler.o scrio.o fd.o panic.o fat.o pager.o syscall.o aout.o
+OBJS = head.o irq.o scheduler.o scrio.o fd.o panic.o fat.o pager.o syscall.o aout.o elf.o binfmt.o
 LIBOBJS = ../lib/string.o
 
 all: hello

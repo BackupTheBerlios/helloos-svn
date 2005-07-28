@@ -173,13 +173,21 @@ void scheduler()
 // идентификатор, номер сегмента TSS и адрес каталога страниц.
 void scheduler_ps()
 {
-   printf("PID\tTSSs\tPG_DIR\n");
+   printf("PID\tFILENAME\tTSSs\tPG_DIR\n");
 
    uint i;
+   uchar name83[12];
+   name83[11] = 0;
    for (i = 0; i < NTasks; i++)
    {
-      printf("%d\t%xh\t%xh\n",
+      memcpy(&name83, &Task[i]->file.Name, 11);
+      int j;
+      for (j = 0; j < 11; j++)
+         if (name83[j] == 0)
+            name83[j] = ' ';
+      printf("%d\t%s\t%xh\t%xh\n",
             Task[i]->pid,
+            &name83,
             Task[i]->tsss,
             Task[i]->tss.cr3&0xfffff000);
    }

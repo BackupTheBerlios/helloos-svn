@@ -12,7 +12,6 @@
  */
 
 
-
 #include <helloos/io.h>
 #include <helloos/types.h>
 #include <helloos/fd.h>
@@ -432,12 +431,12 @@ void command(char *cmd)
    }
    if (strncmp(cmd, "info", 4) == 0)   // Прочитать a.out-заголовки у файла, заданного параметром
    {
-      mysys_info(&cmd[5]);
+      mysys_bin_info(&cmd[5]);
       return;
    }
    if (strncmp(cmd, "exe", 3) == 0)    // Запустить a.out-файл, заданный параметром
    {
-      mysys_load(&cmd[4]);
+      mysys_bin_load(&cmd[4]);
       return;
    }
    if (strncmp(cmd, "pages", 5) == 0)  // Сколько занимает в памяти процесс. pid задан параметром
@@ -454,13 +453,14 @@ void command(char *cmd)
    if (strcmp(cmd, "gp") == 0)
    {
       *(uchar*)(0xc0000000) = 5;
+      return;
    }
-
    if (strcmp(cmd, "cl") == 0)
    {
       int i;
       for (i = 0; i < 16; i++)
          _puts_color("X", i);
+      return;
    }
    _puts("Unknown command\n");
 }

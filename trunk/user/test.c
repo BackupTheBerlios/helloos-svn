@@ -5,7 +5,7 @@
  *  $Id$
  *
  *  Демонстрационный бинарник. Компилируется
- *  в формат a.out и может быть запущен ядром.
+ *  в формат ELF и может быть запущен ядром.
  *
  */
 
@@ -23,7 +23,6 @@ int main()
 //   mysys_nputs_color("I'm alive!\n", -1, 0xc);
 
    // И мигаем им до посинения
-#define INVOKE_PF
 #ifdef INVOKE_GP
    uint gp_counter = 10000;
 #endif

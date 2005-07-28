@@ -18,6 +18,8 @@
 #include <helloos/head.h>
 #include <helloos/fat.h>
 #include <helloos/aout.h>
+#include <helloos/elf.h>
+#include <helloos/binfmt.h>
 #include <config.h>
 
 // Эта структура будет хранить TSS задачи. Это лучше чем
@@ -72,8 +74,13 @@ struct _TaskStruct
 
    // Дескриптор файла. Нужен для demand-loading.
    DirEntry file;
+
+   uchar BinFormat;
    // Заголовок a.out
    Exec header;
+
+   Elf32_Ehdr elf_header;
+   Elf32_Phdr pheaders[5];
 
    // Этот массив будет служить стеком для системных вызовов
    uchar syscall_stack[3024];

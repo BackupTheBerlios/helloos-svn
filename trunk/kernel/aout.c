@@ -42,6 +42,23 @@
 
 
 
+// Является ли файл A.OUT-бинарником?
+bool aout_is(char *Name)
+{
+   char name83[11];
+
+   Make83Name(Name, name83);
+   DirEntry Entry;
+   if (FindEntry(0, name83, &Entry) == (uint)-1)
+      return 0;
+
+   uint FirstLong;
+   LoadPart(&Entry, &FirstLong, 0, sizeof(uint));
+   return FirstLong==0x0064010b;
+}
+
+
+
 // Печать заголовков файла, заданного именем
 void aout_info(char *Name)
 {
@@ -104,8 +121,12 @@ void aout_info(char *Name)
 }
 
 
+// FIXME: это количество страниц, выделяемых на стек процесса.
+// Нужно как-то лучше придумать.
+#define USER_STACK_PAGES   1
+
 // Запуск файла, заданного именем
-#define USER_STACK_PAGES      1
+// (см. комментарии в binfmt.c)
 void aout_load(char *Name)
 {
    char name83[11];
@@ -119,9 +140,11 @@ void aout_load(char *Name)
       return;
    }
 
+   // Грузим заголовок
    Exec exec;
    LoadPart(&Entry, &exec, 0, sizeof(Exec));
 
+   // Проверяем пригодность файла
    if (N_MID(exec) != M_386)
    {
       printf("Only 386's binaries are supported\n");
@@ -129,66 +152,45 @@ void aout_load(char *Name)
    }
    if (N_MAGIC(exec) != ZMAGIC)
    {
-      printf("Not-zmagic binaries are not supported yet\n");
+      printf("Not-ZMAGIC binaries are not supported yet\n");
       return;
    }
 
+   // Количество страниц в каждой секции
    ushort TextPages = (exec.a_text + 0xfff) / 0x1000;
    ushort DataPages = (exec.a_data + 0xfff) / 0x1000;
    ushort  BSSPages = (exec.a_bss  + 0xfff) / 0x1000;
 
-   ulong *pg_dir;//, *pg0;
-   pg_dir   = (ulong*)alloc_first_page();
-//   pg0      = (ulong*)alloc_first_page();
 
+   // Создаем каталог страниц
+   ulong *pg_dir = (ulong*)alloc_first_page();
+   // И записываем в него системные таблицы
    memset(pg_dir, 0, 0x1000);
-//   memset(pg0   , 0, 0x1000);
-//   pg_dir[0]      = (ulong)pg0 + 0x7;
    pg_dir[0x200]  = 0x3000 + 0x7;
    pg_dir[0x201]  = 0x4000 + 0x7;
 
- //  int i;
- //  ulong pg;
- //  for (i = 0; i < TextPages; i++)
- //  {
- //     pg = alloc_first_page();
- //     LoadPart(&Entry, (void*)pg, N_TXTOFF(exec)+i*0x1000, 0x1000);
- //     pg0[i] = pg + 0x7;
- //  }
- //  // Я надеюсь, что хотя бы размеры секций выровнены по страницам
- //  for (i = 0; i < DataPages; i++)
- //  {
- //     pg = alloc_first_page();
- //     LoadPart(&Entry, (void*)pg, N_DATOFF(exec)+i*0x1000, 0x1000);
- //     pg0[TextPages+i] = pg + 0x7;
- //  }
- //  for (i = 0; i < BSSPages; i++)
- //  {
- //     pg = alloc_first_page();
- //     memset((void*)pg, 0, 0x1000); // В доке [8] сказано занулять
- //     pg0[TextPages+DataPages+i] = pg + 0x7;
- //  }
 
-   // FIXME: Для стека выделяется одна отдельная страница
-//   ulong pg_stack = alloc_first_page();
-   //ulong user_stack_top = (TextPages+DataPages+BSSPages) * 0x1000 ;  // FIXME: Какого размера делать стек для a.out?
-//   pg0[TextPages+DataPages+BSSPages] = pg_stack + 0x7;
-
-
-
+   // Создаем для процесса TaskStruct
    TaskStruct *task = (TaskStruct*)alloc_first_page();
 
+   // Достаем адрес GDT
    GDTDescriptor GDT;
    __asm__("sgdt %0":: "m" (GDT));
    ushort desc_count = (GDT.Size + 1) >> 3;
+   // Сюда допишем TSS
    ushort tssn = desc_count;
 
 
+   // Заполняем атрибуты
    task->pid = CurPID++;
    task->tsss = tssn << 3;
+   task->BinFormat = BIN_AOUT;
+   // Копируем DirEntry и заголовок A.OUT
    memcpy(&task->file, &Entry, sizeof(DirEntry));
    memcpy(&task->header, &exec, sizeof(Exec));
 
+   
+   // Заполняем TSS
    task->tss.tl = 0;
    task->tss.esp0 = (ulong)&task->syscall_stack + sizeof(task->syscall_stack); // Стек для системных вызовов
    task->tss.ss0 = KERNEL_DS;
@@ -199,6 +201,7 @@ void aout_load(char *Name)
    task->tss.eax = task->tss.ebx =
       task->tss.ecx = task->tss.edx =
       task->tss.esi = task->tss.edi = 0;
+   // Стек следует сразу за остальными секциями
    task->tss.esp = task->tss.ebp = (TextPages+DataPages+BSSPages + USER_STACK_PAGES)*0x1000 - 4;
    task->tss.cs = USER_CS;
    task->tss.es = task->tss.ss =
@@ -206,6 +209,9 @@ void aout_load(char *Name)
       task->tss.gs = USER_DS;
    task->tss.ldt = 0;
    task->tss.iomap_trace = 0;
+
+   // Создаем в GDT дескриптор для TSS
+   // FIXME: Их нужно удалять при завершении процесса!
 
    // TSS адресуется через верхнюю память
    ulong tss_addr = (ulong)&task->tss + 0x80000000;
@@ -217,83 +223,59 @@ void aout_load(char *Name)
    GDT.Size += 8; // Один дескриптор добавили
    __asm__("lgdt %0"::"m"(GDT));
 
+   // Ура
    Task[NTasks] = task;
    NTasks++;
 }
 
 
-extern inline void memcpy_to_user(void *dest, void *src, uint n)
+// Обработчик #PF для A.OUT-процессов
+// Аргумент - адрес, по которому программа попыталась обратиться
+// Результат - адрес загруженной страницы, или 0, если процесс "ошибся адресом"
+ulong aout_pf(uint address)
 {
-   __asm__(
-         "push %%es\n"
-         "push %%gs\n"
-         "pop %%es\n"
-         "movl %0, %%edi\n"
-         "movl %1, %%esi\n"
-         "cld\n"
-         "rep movsb\n"
-         "pop %%es\n"
-         ::"m"(dest), "m"(src), "c"(n):"di", "si");
-}
+   TaskStruct *task = Task[Current];
 
-void pf_handler(uint address, uint errcode)
-{
-//   printf_color(0x04, "Page Fault: addr=0x%x, errcode=0x%x\n", address, errcode);
+   // Наибольшая страница, которая будет загружаться из файла
+   // (я все время предполагаю, что размеры секций кратны странице)
+   uint filepages = task->header.a_text + task->header.a_data;
 
-   uchar ok = 0; // Set with 1 if PF is successfully handled
+   // Объем АП процесса
+   uint maxpage = filepages + ((task->header.a_bss + 0xfff) & 0xfffff000)
+      + USER_STACK_PAGES * 0x1000;
 
+   bool ok = 0;
 
-   if ((errcode & 1) == 0)
+   // Преобразуем адрес в адрес страницы
+   ulong pageaddr = address & 0xfffff000;
+   ulong *tmppage = 0;
+
+   // Если это страница должна грузиться из файла
+   if (address < filepages)
    {
-      TaskStruct *task = Task[Current];
-      uint filepages = task->header.a_text + task->header.a_data;
-      uint maxpage = filepages + ((task->header.a_bss + 0xfff) & 0xfffff000) + USER_STACK_PAGES * 0x1000;
+      // Выделяем страницу...
+      tmppage = (ulong*)alloc_first_page();
 
+      // ... и загружаем ее. Пользуемся тем, что LoadPart остановится
+      // на конце файла.
+      LoadPart(&task->file, tmppage, pageaddr+N_TXTOFF(task->header), 0x1000);
 
-      ulong pageaddr = address & 0xfffff000;
-      ulong *tmppage = 0;
-
-      if (address < filepages)   // text or data page
-      {
-         tmppage = (ulong*)alloc_first_page();
-         LoadPart(&task->file, tmppage, pageaddr+N_TXTOFF(task->header), 0x1000);
-
-         ok = 1;
-      }
-
-      if (address >= filepages && address < maxpage)   // bss or stack page
-      {
-         tmppage = (ulong*)alloc_first_page();
-         memset(tmppage, 0, 0x1000);
-
-         ok = 1;
-      }
-
-      if (ok)
-      {
-         ulong *pg_dir = (ulong*)task->tss.cr3;
-         ulong *pg;
-         if ((pg_dir[address>>22] & 1) == 0)
-         {
-            pg = (ulong*)alloc_first_page();
-//            printf("New page table allocated (0x%x)\n", pg);
-            memset(pg, 0, 0x1000);
-            pg_dir[address>>22] = (ulong)pg + 0x7;
-         }
-         else
-            pg = (ulong*)(pg_dir[address>>22] & 0xfffff000);
-
-         pg[(address>>12) & 0x3ff] = (ulong)tmppage + 0x7;
-         __asm__("mov %%eax, %%cr3\n"
-               ::"a"(task->tss.cr3));
-      }
+      ok = 1;
    }
 
-   if (! ok)
+   // Если это страница bss или стека
+   if (address >= filepages && address < maxpage)
    {
-      printf_color(0x04, "Process wants too many (req addr=0x%x)! Killing him...\n", address);
-      scheduler_kill_current();
+      // Выделяем страницу...
+      tmppage = (ulong*)alloc_first_page();
+      // ... и обнуляем ее
+      memset(tmppage, 0, 0x1000);
+
+      ok = 1;
    }
-//   else
-//      printf_color(0x0a, "ok\n");
+
+   if (ok)
+      return (ulong)tmppage;
+   else
+      return 0;
 }

@@ -290,7 +290,7 @@ rp_sidt:
    add $4, %esp
 
    push $startfilename
-   call aout_load
+   call bin_load_bin
    add $4, %esp
 
 
@@ -309,7 +309,7 @@ rp_sidt:
 
 
 startfilename:
-   .ascii "start.out\0"
+   .ascii "start\0"
 
 
 woow_msg:
@@ -334,7 +334,7 @@ mbytes:
    .ascii "\001\022\t\t8Mb mapped on low and high memory\n\0"
 
 loading_start_msg:
-   .ascii "\nOk, \001\021kernel\003 activated. Now loading the \001\015start.out...\n\n\0"
+   .ascii "\nOk, \001\021kernel\003 activated. Now loading the \001\015start...\n\n\0"
 
 
 
@@ -411,6 +411,8 @@ SYS_CALL:
    push %es
    push %fs
    push %gs
+   push %edi
+   push %esi
    push %edx
    push %ecx
    push %ebx
@@ -433,6 +435,8 @@ syscall_ret:
    pop %ebx
    pop %ecx
    pop %edx
+   pop %esi
+   pop %edi
    pop %gs
    pop %fs
    pop %es
@@ -481,10 +485,12 @@ gp_str:
 .global pf_fault
 .align 2
 pf_fault:
-   push %ds    // 7
-   push %es    // 6
-   push %fs    // 5
-   push %gs    // 4
+   push %ds    // 9
+   push %es    // 8
+   push %fs    // 7
+   push %gs    // 6
+   push %edi   // 5
+   push %esi   // 4
    push %edx   // 3
    push %ecx   // 2
    push %ebx   // 1
@@ -497,7 +503,7 @@ pf_fault:
    mov $USER_DS, %ebx
    mov %ebx, %gs
 
-   mov 8*4(%esp), %eax
+   mov 10*4(%esp), %eax
 
    push %eax
    mov %cr2, %eax
@@ -511,6 +517,8 @@ pf_fault:
    pop %ebx
    pop %ecx
    pop %edx
+   pop %esi
+   pop %edi
    pop %gs
    pop %fs
    pop %es

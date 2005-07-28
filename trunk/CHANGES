@@ -6,6 +6,30 @@
 
 
 
+CHANGES IN 0.0h:
+
+   * Support of multiple binary formats (binfmt.c). Demand loading works for
+      each format.
+
+   * Support of ELF binary format! i386-aout-gcc is not more needed to compile
+      HelloOS. Start file is now compiling into ELF file.
+      No dynamic linking or shared libraries are supported now for ELF, only
+      static files will work. All relocation or dynamic info is ignored.
+      There is common syscalls to load binaries of A.OUT and ELF formats.
+
+   * Fixed bug: %edi and %esi registers now stored across syscalls and
+      interrupts
+
+   * New types in types.h: addr_t and offs_t are synonyms to uint. In the next
+      version i'll replace uint and ulong with these types in many places in
+      order to increase clearness of source code.
+
+   * Ugly mymain.c removed. I think that in future i can remove support of
+      A.OUT binaries because nobody seems to use it in the real world.
+
+
+
+
 CHANGES IN 0.0g:
 
    * Demand loading of binary files is implemented

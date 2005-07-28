@@ -1,23 +1,24 @@
-all: test.out gp.out
+all: test.elf gp.elf pf.elf et.elf
 
-MYMAIN = ../lib/mymain.aout
+%.elf: %.o
+	ld -M -e main -o $@ $< >map.$<.txt
 
-test.out: test.aout $(MYMAIN)
-	i386-aout-ld -M -o $@ test.aout $(MYMAIN) -e _main >map.test.txt
+gp.o: test.c
+	gcc $(CFLAGS) -O1 -DINVOKE_GP -c $< -o $@
 
-gp.out: gp.aout $(MYMAIN)
-	i386-aout-ld -M -o $@ gp.aout $(MYMAIN) -e _main >map.gp.txt
+pf.o: test.c
+	gcc $(CFLAGS) -O1 -DINVOKE_PF -c $< -o $@
 
 
-test.aout: test.c
-	i386-aout-gcc $(AOUT_CFLAGS) -c $< -o $@
+et.elf: et.o
+	ld -e main et.o -o et.elf
 
-gp.aout: test.c
-	i386-aout-gcc $(AOUT_CFLAGS) -DINVOKE_GP -c $< -o $@
+.c.o:
+	gcc $(CFLAGS) -O1 -c $< -o $@
 
 
 clean:
-	rm -f *.{i,s,o} *~ *.aout *.out depend map.*.txt
+	rm -f *.{i,s,o} *~ *.elf *.o depend map.*.txt
 
 depend:
 	for i in *.[cS]; do gcc -M $(CFLAGS) $$i; done >depend

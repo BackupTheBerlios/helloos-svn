@@ -7,7 +7,11 @@
  *  Определения для работы с бинарниками
  *  в формате a.out
  *
+ *  См. [9]
  *  См. FIXME в aout.c
+ *
+ *  Значком [*] помечены поля и константы, которые
+ *  сейчас игнорируются HelloOS при загрузке файлов
  *
  */
 
@@ -17,7 +21,18 @@
 
 #include <helloos/types.h>
 
+// Определить, является ли файл A.OUT
+bool aout_is(char *Name);
+// Напечатать заголовки A.OUT
+void aout_info(char *Name);
+// Запустить файл
+void aout_load(char *Name);
+// Обработчик #PF для A.OUT-бинарников
+addr_t aout_pf(addr_t address);
 
+
+
+// Заголовок A.OUT
 typedef struct
 {
    uint a_midmag; // Флаги
@@ -26,8 +41,8 @@ typedef struct
    uint a_bss;    // Размер секции неинициализированных данных
    uint a_syms;   // Размер секции символов
    uint a_entry;  // Точка входа
-   uint a_trsize; // Размер секции линковочных записей для кода
-   uint a_drsize; // Размер секции линковочных записей для данных
+   uint a_trsize; // Размер секции линковочных записей для кода [*]
+   uint a_drsize; // Размер секции линковочных записей для данных [*]
 } Exec;
 
 // Извлекаем флаги
@@ -44,6 +59,7 @@ typedef struct
 #define M_MIPS2      152
 
 // Извлекаем тип бинарника
+// HelloOS принимает только ZMAGIC
 #define N_MAGIC(exec) ((exec).a_midmag & 0xffff)
 #define OMAGIC       0407
 #define NMAGIC       0410
@@ -93,13 +109,6 @@ typedef struct
    uint r_copy       :1;
 } Relocation_Info;
 
-
-
-
-// Напечатать заголовки
-void aout_info(char *Name);
-// Запустить
-void aout_load(char *Name);
 
 
 

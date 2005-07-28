@@ -1,15 +1,16 @@
-OBJS = start.aout ../lib/string.aout ../lib/mymain.aout
+OBJS = start.o ../lib/string.o
 
-all: start.out
+all: start
 
-start.out: $(OBJS)
-	i386-aout-ld -M -o $@ $(OBJS) -e _main >map.txt
+start: $(OBJS)
+	ld -M -o $@ $(OBJS) -e main >map.txt
 
-start.aout: start.c
-	i386-aout-gcc $(AOUT_CFLAGS) -c $< -o $@
+.c.o:
+	gcc $(CFLAGS) -c $< -o $@
+
 
 clean:
-	rm -f *.{i,s,o} *~ *.aout *.out depend map.txt
+	rm -f *.{i,s,o} *~ start depend map.txt
 
 
 depend:

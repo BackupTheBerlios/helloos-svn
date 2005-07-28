@@ -42,3 +42,6 @@
 [10] Write Your Own Operating System (FAQ)
       Stuart 'Dark Fiber' George
       October 23, 2000
+
+[11] Executable and Linkable Format (ELF)
+      Portable Formats Specification, Version 1.1
