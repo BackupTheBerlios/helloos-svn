@@ -8,7 +8,8 @@ int main()
 {
    uint myaddr = mysys_getnewcharaddr();
 
-   while (1)
+   uint counter = 100000;
+   while (counter--)
    {
       mysys_incvideochar(myaddr);
    }

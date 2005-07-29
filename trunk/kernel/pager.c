@@ -17,11 +17,13 @@
 
 #include <helloos/types.h>
 #include <config.h>
+#include <helloos/pager.h>
 
 #include <string.h>
 #include <helloos/scrio.h>
 #include <helloos/io.h>
 #include <helloos/panic.h>
+#include <helloos/scheduler.h>
 
 // Количество распределяемых страниц
 #define PAGES_NR     (CFG_MEM_SIZE-CFG_LOW_MEM)
@@ -45,9 +47,9 @@ void pager_init()
 
 
 
-// Находит первую попавшуюся страницу,
-// помечает как занятую и возвращает ее адрес
-ulong alloc_first_page()
+// Находит первую попавшуюся физическую страницу,
+// помечает как занятую и возвращает ее физический адрес
+addr_t alloc_first_page()
 {
    ulong res, dumb;
    __asm__ volatile (
@@ -57,20 +59,49 @@ ulong alloc_first_page()
    res = PAGES_NR - res;
    if (res == PAGES_NR)
    {
-      panic("Cannot allocate first page! Out of memory!");
+      panic("Cannot allocate first page! Out of memory?!");
       return 0;
    }
    page_map[res] = 1;
-   //printf("alloc_first_page=0x%x\n", (res + PAGE_START)*0x1000);
-   return (res + PAGE_START)*0x1000;
+   //printf("alloc_first_page=0x%x\n", (res + PAGE_START) * PAGE_SIZE);
+   return (res + PAGE_START) * PAGE_SIZE;
 }
 
 
-// Освобождает страницу по указателю на любой
-// (физический) адрес в этой странице
-void free_page(ulong ptr)
+// Освобождает физическую страницу по указателю на любой
+// физический адрес в этой странице
+void free_page(addr_t ptr)
 {
+   if ((ptr>>12) < PAGE_START)
+      return panic("Woow!... Trying to free low-mem!\n");
    if (! page_map[(ptr>>12) - PAGE_START])
       return panic("Trying to free free page!");
    page_map[(ptr>>12) - PAGE_START] = 0;
+}
+
+
+// Маппирует физическую страницу в линейное АП процесса
+void map_page(addr_t phaddr, TaskStruct *task, addr_t vaddr, uint flags)
+{
+   ulong *pg_dir = (ulong*)task->tss.cr3; // Адрес каталога страниц процесса
+   ulong *pg;  // Адрес таблицы страниц (либо существует, либо будет создана)
+
+   // Создана ли уже соответствующая таблица страниц? (проверяется бит P)
+   if ((pg_dir[vaddr >> 22] & 1) == 0)
+   {
+      // Нет. Создадим ее
+      pg = (ulong*)alloc_first_page();
+      // printf("New page talbe allocated (0x%x)\n", pg);
+      memset(pg, 0, PAGE_SIZE);
+      // Прописываем ее в каталоге
+      pg_dir[vaddr >> 22] = (ulong)pg + PAGE_ATTR;
+   }
+   else
+      // Создана. Просто возьмем ее адрес
+      pg = (ulong*)PAGE_ADDR(pg_dir[vaddr >> 22]);
+
+   // Прописываем новую страницу в таблице страниц
+   pg[(vaddr >> 12) & 0x3ff] = PAGE_ADDR(phaddr) + flags;
+
+   reload_cr3();
 }

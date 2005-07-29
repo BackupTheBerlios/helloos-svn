@@ -20,9 +20,17 @@ typedef unsigned char   uchar;
 typedef unsigned short  ushort;
 typedef unsigned int    uint;
 typedef unsigned int    ulong;
+
+// Типы используются для того, чтобы подчеркнуть,
+// что переменная содержит адрес, смещение, индекс
 typedef unsigned int    addr_t;
 typedef unsigned int    offs_t;
+typedef unsigned int    indx_t;
+
+// Для стандартных функций
 typedef unsigned int    size_t;
+
+
 typedef uchar bool;
 
 

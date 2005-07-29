@@ -532,6 +532,16 @@ pf_str:
    .ascii "\001\014Ouch! Page Fault! Killing current task...\n\0"
 
 
+.align 0x1000
+
+// Сюда пользовательские процессы передают управление при выходе
+.global user_exit_code
+user_exit_code:
+   // В eax содержится код завершения
+   mov %eax, %ebx
+   mov $0, %eax   // 0 - код вызова sys_exit
+   int $0x80
+
 
 .data
 

@@ -103,7 +103,13 @@ void pf_handler(uint address, uint errcode)
    if ((errcode & 1) == 0)
    {
       if (BinFormats[task->BinFormat].load_page)
+         // Функция возвратит физический адрес новой страницы, А ТАКЖЕ ФЛАГИ для этой записи
+         // в таблице страниц
          ok = BinFormats[task->BinFormat].load_page(address);
+   }
+   else
+   {
+      printf_color(0x04, "Strange #PF errcode=0x%x (pid=%d)\n", errcode, Task[Current]->pid);
    }
 
    if (! ok)
@@ -112,31 +118,5 @@ void pf_handler(uint address, uint errcode)
       scheduler_kill_current();
    }
    else
-   {
-      // #PF обработан, страница загружена. Теперь надо ее прописать
-      // в каталоге и таблице страниц
-      ulong *pg_dir = (ulong*)task->tss.cr3; // Адрес каталога страниц
-      ulong *pg;  // Адрес таблицы страниц
-
-      // Создана ли соответствующая таблица страниц?...
-      if ((pg_dir[address>>22] & 1) == 0)
-      {
-         // ... Нет. Создаем ее...
-         pg = (ulong*)alloc_first_page();
-//         printf("New page table allocated (0x%x)\n", pg);
-         memset(pg, 0, 0x1000);
-         // ... и регистрируем в каталоге
-         pg_dir[address>>22] = (ulong)pg + 0x7;
-      }
-      else
-         // ... Да. Просто берем ее адрес.
-         pg = (ulong*)(pg_dir[address>>22] & 0xfffff000);
-
-      // Прописываем новую страницу в таблице страниц
-      pg[(address>>12) & 0x3ff] = ok + 0x7;
-
-      // Перегружаем cr3 чтобы сбросить кэш страниц
-      __asm__("mov %%eax, %%cr3\n"
-            ::"a"(task->tss.cr3));
-   }
+      map_page(ok, Task[Current], address, ok & PA_MASK);
 }

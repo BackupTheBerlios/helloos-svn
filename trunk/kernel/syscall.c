@@ -25,6 +25,8 @@ typedef uint (*syscall_ptr)();
 // Несложно заметить, что все вызовы сделаны только в отладочных
 // целях и их потом, разумеется заменим на нормальные и защищенные
 
+uint sys_exit(uint exitcode);
+
 uint sys_getnewcharaddr();
 uint sys_incvideochar(uint addr);
 uint sys_nputs_color(char *s, uint n, uchar attr);
@@ -45,6 +47,7 @@ uint sys_dbg();
 
 // Таблица системных вызовов
 syscall_ptr syscall_table[] = {
+   (syscall_ptr)sys_exit,
    (syscall_ptr)sys_getnewcharaddr,
    (syscall_ptr)sys_incvideochar,
    (syscall_ptr)sys_nputs_color,
@@ -112,6 +115,18 @@ inline void memcpy_to_user(void *dest, void *src, uint n)
          "pop %%es\n"
          ::"m"(dest), "m"(src), "c"(n):"di", "si");
 }
+
+
+// Системный вызов sys_exit
+// Его вызывает пользовательский процесс когда завершается
+uint sys_exit(uint exitcode)
+{
+   printf_color(0x04, "Process %d exits with code %d\n", Task[Current]->pid, exitcode);
+   scheduler_kill_current();
+
+   return 0;
+}
+
 
 
 // Системный вызов sys_getnewcharaddr

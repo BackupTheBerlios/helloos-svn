@@ -288,6 +288,8 @@ void elf_info(char *Name)
 }
 
 
+// Определена в head.S
+extern void user_exit_code();
 
 
 // FIXME: это количество страниц, выделяемых на стек процесса.
@@ -330,11 +332,11 @@ void elf_load(char *Name)
    // Создаем для процесса каталог страниц
    ulong *pg_dir;
    pg_dir = (ulong*)alloc_first_page();
-   memset(pg_dir, 0, 0x1000);
+   memset(pg_dir, 0, PAGE_SIZE);
 
    // Прописываем системные таблицы страниц, находящиеся по адресам 0x3000 и 0x4000
-   pg_dir[0x200] = 0x3000 + 0x7;
-   pg_dir[0x201] = 0x4000 + 0x7;
+   pg_dir[0x200] = 0x3000 + SYS_PAGE_ATTR;
+   pg_dir[0x201] = 0x4000 + SYS_PAGE_ATTR;
 
    // Выделяем память для TaskStruct задачи
    TaskStruct *task = (TaskStruct*)alloc_first_page();
@@ -354,7 +356,7 @@ void elf_load(char *Name)
    memcpy(&task->elf_header, &Header, sizeof(Header));   // а также заголовок ELF
    memset(&task->pheaders, 0, sizeof(task->pheaders));   // и
    memcpy(&task->pheaders, &PHeader, sizeof(PHeader));   // заголовки сегментов
-   
+
 
    // Заполняем TSS
    task->tss.tl = 0;
@@ -367,13 +369,27 @@ void elf_load(char *Name)
    task->tss.eax = task->tss.ebx =
       task->tss.ecx = task->tss.edx =
       task->tss.esi = task->tss.edi = 0;
-   task->tss.esp = task->tss.ebp = USER_STACK_PAGES*0x1000;
+   task->tss.esp = task->tss.ebp = USER_STACK_PAGES * PAGE_SIZE - 4; // 4 байта для адреса возврата
    task->tss.cs = USER_CS;
    task->tss.es = task->tss.ss =
       task->tss.ds = task->tss.fs =
       task->tss.gs = USER_DS;
    task->tss.ldt = 0;
    task->tss.iomap_trace = 0;
+
+   // Чтобы процесс имел возможность нормально завершится, мы должны предоставить ему адрес
+   // возврата в стеке. Процесс передаст управление по этому адресу при выходе из main().
+   // Для этого мы маппируем страницу с функцией user_exit_code (head.S) в АП процесса.
+   // Адрес, по которому мы ее будет маппировать, расположим сразу после стека (FIXME: создаем
+   // сами себе грабли для динамической линковки...)
+
+   addr_t exit_page = USER_STACK_PAGES * PAGE_SIZE;
+
+   // Выделим одну стековую страницу для того, чтобы положить в стек адрес возврата
+   addr_t stack_page = alloc_first_page();
+   map_page(stack_page, task, PAGE_ADDR(USER_STACK_PAGES * PAGE_SIZE - 1), PAGE_ATTR);
+   *(ulong*)(stack_page+0xffc) = exit_page;
+   map_page((addr_t)&user_exit_code, task, exit_page, PA_USER | PA_P | PA_NONFREE);
 
    // Создаем в GDT дескриптор для TSS
    // FIXME: Их нужно удалять при завершении процесса!
@@ -397,14 +413,14 @@ void elf_load(char *Name)
 
 // Обработчик #PF для ELF-процессов
 // Аргумент - адрес, по которому программа попыталась обратиться
-// Результат - адрес загруженной страницы, или 0, если процесс "ошибся адресом"
+// Результат - адрес загруженной страницы + флаги, или 0, если процесс "ошибся адресом"
 addr_t elf_pf(addr_t address)
 {
    // Может быть, стоит это передавать параметром
    TaskStruct *task = Task[Current];
 
    // Преобразуем в адрес страницы
-   addr_t pageaddr = address & 0xfffff000;
+   addr_t pageaddr = PAGE_ADDR(address);
 
    bool ok = 0;
    uchar *tmppage = 0;
@@ -419,14 +435,14 @@ addr_t elf_pf(addr_t address)
          // Адреса сегмента в памяти и в файле, согласно доке, должны быть равны по модулю
          // размера страницы, и это упрощает нам жизнь.
          // fileoffs - начало в файле первой страницы, содержащей сегмент (вернее - его часть)
-         offs_t fileoffs = ph->p_offset & 0xfffff000;
+         offs_t fileoffs = PAGE_ADDR(ph->p_offset);
          // segstart - начало в памяти первой страницы, содержащей сегмент (вернее - его часть)
-         addr_t segstart = ph->p_vaddr & 0xfffff000;
+         addr_t segstart = PAGE_ADDR(ph->p_vaddr);
          // filesize - размер блока, который мы будем грузить из файла. Может быть либо целой
          // страницой, либо частью страницы. Если обратились к неинициализированной части
          // сегмента (memsz>address>filesz), то filesize будет меньше 0. Это исправляется
          // следующей строкой.
-         int filesize = MIN(0x1000, (int)ph->p_filesz - ((int)pageaddr - (int)ph->p_vaddr));
+         int filesize = MIN(PAGE_SIZE, (int)ph->p_filesz - ((int)pageaddr - (int)ph->p_vaddr));
          filesize = MAX(filesize, 0);
          // Выделяем новую страницу...
          tmppage = (uchar*)alloc_first_page();
@@ -435,7 +451,7 @@ addr_t elf_pf(addr_t address)
          if (filesize > 0)
             LoadPart(&task->file, tmppage, fileoffs+pageaddr-segstart, filesize);
          // diff - размер неинициализированной части, которую заполняем нулями
-         int diff = MIN(0x1000, ph->p_memsz - (pageaddr - ph->p_vaddr)) - filesize;
+         int diff = MIN(PAGE_SIZE, ph->p_memsz - (pageaddr - ph->p_vaddr)) - filesize;
          if (diff > 0)
             memset(&tmppage[filesize], 0, diff);
          // Сделано, все свободны
@@ -451,16 +467,17 @@ addr_t elf_pf(addr_t address)
    if (!ok)
    {
       // Если адрес внутри нашего стека
-      if (address < USER_STACK_PAGES*0x1000)
+      if (address < USER_STACK_PAGES * PAGE_SIZE)
       {
          tmppage = (uchar*)alloc_first_page();
-         memset(tmppage, 0, 0x1000);
+         printf_color(0x04, "New stack page for ELF: 0x%x\n", address);
+         memset(tmppage, 0, PAGE_SIZE);
          ok = 1;
       }
    }
 
    if (ok)
-      return (ulong)tmppage;
+      return (ulong)tmppage + PAGE_ATTR;
    else
       return 0;
 }

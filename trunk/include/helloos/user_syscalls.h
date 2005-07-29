@@ -59,17 +59,18 @@ extern inline restype mysys_##name(t1 a1, t2 a2, t3 a3)\
 // Несложно заметить, что все вызовы сделаны только в отладочных
 // целях и их потом, разумеется заменим на нормальные и защищенные
 
-SYSCALL0(getnewcharaddr,   0,    uint)
-SYSCALL1(incvideochar,     1,    uint, uint)
-SYSCALL3(nputs_color,      2,    uint, const char*, uint, uchar)
-SYSCALL0(clear_screen,     3,    uint)
-SYSCALL2(readline,         4,    uint, char*, uint)
-SYSCALL1(panic,            5,    uint, char*)
-SYSCALL0(ps,               6,    uint)
-SYSCALL1(kill,             7,    uint, uint)
-SYSCALL1(bin_info,         8,    uint, char*)
-SYSCALL1(bin_load,         9,    uint, char*)
-SYSCALL1(pages,            10,   uint, uint)
-SYSCALL0(dbg,              11,   uint)
+SYSCALL1(exit,             0,    uint, uint)
+SYSCALL0(getnewcharaddr,   1,    uint)
+SYSCALL1(incvideochar,     2,    uint, uint)
+SYSCALL3(nputs_color,      3,    uint, const char*, uint, uchar)
+SYSCALL0(clear_screen,     4,    uint)
+SYSCALL2(readline,         5,    uint, char*, uint)
+SYSCALL1(panic,            6,    uint, char*)
+SYSCALL0(ps,               7,    uint)
+SYSCALL1(kill,             8,    uint, uint)
+SYSCALL1(bin_info,         9,    uint, char*)
+SYSCALL1(bin_load,         10,    uint, char*)
+SYSCALL1(pages,            11,   uint, uint)
+SYSCALL0(dbg,              12,   uint)
 
 #endif // __USER_SYSCALLS_H

@@ -79,18 +79,21 @@ void scheduler_kill(ulong pid)
          // Проходим по каталогу страниц задачи и ищем непустые записи
          // Для каждой записи проходим по соответствующей таблице страниц
          // и освобождаем выделенные страницы. По пути считаем их количество.
-         ulong *pg_dir = (ulong*)(task->tss.cr3 & 0xfffff000);
+         ulong *pg_dir = (ulong*)PAGE_ADDR(task->tss.cr3);
          for (j = 0; j < 512; j++)
             if ((ulong)pg_dir[j] & 0x1)
             {
                for (k = 0; k < 1024; k++)
-                  if (((ulong*)(pg_dir[j]&0xfffff000))[k] & 1)
+               {
+                  addr_t page = ((ulong*)PAGE_ADDR(pg_dir[j]))[k];
+                  if ((page & PA_P) && ((page & PA_NONFREE) == 0))
                   {
                      pagecount++;
-                     free_page(((ulong*)(pg_dir[j]&0xfffff000))[k]);
+                     free_page(page);
                   }
+               }
                pagecount++;
-               free_page((pg_dir[j]&0xfffff000));
+               free_page(pg_dir[j]);
             }
          pagecount+=2;
          free_page(task->tss.cr3);
@@ -132,20 +135,31 @@ void scheduler_pages(ulong pid)
       {
          TaskStruct* task = Task[i];
          int j, k;
-         ulong *pg_dir = (ulong*)(task->tss.cr3 & 0xfffff000);
-         uint count = 0, syscount = 0;
+         ulong *pg_dir = (ulong*)PAGE_ADDR(task->tss.cr3);
+         uint user = 0, sys= 0, nf = 0;
          for (j = 0; j < 512; j++)
             if ((ulong)pg_dir[j] & 0x1)
             {
+               sys++;
                for (k = 0; k < 1024; k++)
-                  if (((ulong*)(pg_dir[j]&0xfffff000))[k] & 1)
-                     count++;
-               syscount++;
+               {
+                  addr_t page = ((ulong*)PAGE_ADDR(pg_dir[j]))[k];
+                  if (page & PA_P)
+                  {
+                     if (page & PA_NONFREE)
+                        nf++;
+                     else
+                        user++;
+                  }
+               }
             }
-         printf("User pages:\t%d\n", count);
-         syscount += 2;
-         printf("System pages:\t%d\n", syscount);
-         printf("Total pages:\t%d\n", count+syscount);
+         printf("User pages:\t%d\n", user);
+         sys += 2; // Еще TSS и pg_dir
+         printf("System pages:\t%d\n", sys);
+         printf("System pages\nin user space:\t%d\n", nf);
+         printf("=================\n");
+         printf("Total pages:\t%d\n", user+sys+nf);
+         printf("Process size:\t%d\n", user+sys);
       }
    }
    printf("\n");
@@ -189,6 +203,6 @@ void scheduler_ps()
             Task[i]->pid,
             &name83,
             Task[i]->tsss,
-            Task[i]->tss.cr3&0xfffff000);
+            PAGE_ADDR(Task[i]->tss.cr3));
    }
 }

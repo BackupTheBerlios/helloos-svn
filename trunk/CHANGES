@@ -6,6 +6,20 @@
 
 
 
+CHANGES IN 0.0i:
+
+   * All paging-specific constants and macroses are defined in pager.h.
+      Pager.c contains functions for dealing with pages, not only
+      memory-manager. Added check for freeing low-memory page.
+
+   * User processes are able to exit via sys_exit. If it returns from main()
+      sys_exit will be called automatically by user_exit_code in head.S. Demo
+      et.c demonstrates it.
+
+   * New type indx_t for indexes
+
+
+
 CHANGES IN 0.0h:
 
    * Support of multiple binary formats (binfmt.c). Demand loading works for

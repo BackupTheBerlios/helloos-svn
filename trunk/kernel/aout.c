@@ -121,6 +121,9 @@ void aout_info(char *Name)
 }
 
 
+// Определена в head.S
+extern void user_exit_code();
+
 // FIXME: это количество страниц, выделяемых на стек процесса.
 // Нужно как-то лучше придумать.
 #define USER_STACK_PAGES   1
@@ -157,17 +160,17 @@ void aout_load(char *Name)
    }
 
    // Количество страниц в каждой секции
-   ushort TextPages = (exec.a_text + 0xfff) / 0x1000;
-   ushort DataPages = (exec.a_data + 0xfff) / 0x1000;
-   ushort  BSSPages = (exec.a_bss  + 0xfff) / 0x1000;
+   ushort TextPages = (exec.a_text + 0xfff) / PAGE_SIZE;
+   ushort DataPages = (exec.a_data + 0xfff) / PAGE_SIZE;
+   ushort  BSSPages = (exec.a_bss  + 0xfff) / PAGE_SIZE;
 
 
    // Создаем каталог страниц
    ulong *pg_dir = (ulong*)alloc_first_page();
    // И записываем в него системные таблицы
-   memset(pg_dir, 0, 0x1000);
-   pg_dir[0x200]  = 0x3000 + 0x7;
-   pg_dir[0x201]  = 0x4000 + 0x7;
+   memset(pg_dir, 0, PAGE_SIZE);
+   pg_dir[0x200]  = 0x3000 + SYS_PAGE_ATTR;
+   pg_dir[0x201]  = 0x4000 + SYS_PAGE_ATTR;
 
 
    // Создаем для процесса TaskStruct
@@ -202,13 +205,28 @@ void aout_load(char *Name)
       task->tss.ecx = task->tss.edx =
       task->tss.esi = task->tss.edi = 0;
    // Стек следует сразу за остальными секциями
-   task->tss.esp = task->tss.ebp = (TextPages+DataPages+BSSPages + USER_STACK_PAGES)*0x1000 - 4;
+   task->tss.esp = task->tss.ebp = (TextPages+DataPages+BSSPages + USER_STACK_PAGES) * PAGE_SIZE - 4; // 4 байта на адрес возврата
    task->tss.cs = USER_CS;
    task->tss.es = task->tss.ss =
       task->tss.ds = task->tss.fs =
       task->tss.gs = USER_DS;
    task->tss.ldt = 0;
    task->tss.iomap_trace = 0;
+
+   // Чтобы процесс имел возможность нормально завершится, мы должны предоставить ему адрес
+   // возврата в стеке. Процесс передаст управление по этому адресу при выходе из main().
+   // Для этого мы маппируем страницу с функцией user_exit_code (head.S) в АП процесса.
+   // Адрес, по которому мы ее будет маппировать, расположим сразу после стека (FIXME: создаем
+   // сами себе грабли для динамической линковки...)
+
+   addr_t exit_page = (TextPages+DataPages+BSSPages+USER_STACK_PAGES) * PAGE_SIZE;
+
+   // FIXME: Я НЕ ТЕСТИРОВАЛ ЗАВЕРШЕНИЕ ПРОЦЕССОВ A.OUT
+   addr_t stack_page = alloc_first_page();
+   map_page(stack_page, task, PAGE_ADDR(task->tss.esp), PAGE_ATTR);
+   *(ulong*)(stack_page+0xffc) = exit_page;
+   map_page((addr_t)&user_exit_code, task, exit_page, PA_USER | PA_P | PA_NONFREE);
+
 
    // Создаем в GDT дескриптор для TSS
    // FIXME: Их нужно удалять при завершении процесса!
@@ -231,7 +249,7 @@ void aout_load(char *Name)
 
 // Обработчик #PF для A.OUT-процессов
 // Аргумент - адрес, по которому программа попыталась обратиться
-// Результат - адрес загруженной страницы, или 0, если процесс "ошибся адресом"
+// Результат - адрес загруженной страницы + флаги, или 0, если процесс "ошибся адресом"
 ulong aout_pf(uint address)
 {
    TaskStruct *task = Task[Current];
@@ -241,13 +259,13 @@ ulong aout_pf(uint address)
    uint filepages = task->header.a_text + task->header.a_data;
 
    // Объем АП процесса
-   uint maxpage = filepages + ((task->header.a_bss + 0xfff) & 0xfffff000)
-      + USER_STACK_PAGES * 0x1000;
+   uint maxpage = filepages + PAGE_ADDR(task->header.a_bss + 0xfff)
+      + USER_STACK_PAGES * PAGE_SIZE;
 
    bool ok = 0;
 
    // Преобразуем адрес в адрес страницы
-   ulong pageaddr = address & 0xfffff000;
+   ulong pageaddr = PAGE_ADDR(address);
    ulong *tmppage = 0;
 
    // Если это страница должна грузиться из файла
@@ -258,7 +276,7 @@ ulong aout_pf(uint address)
 
       // ... и загружаем ее. Пользуемся тем, что LoadPart остановится
       // на конце файла.
-      LoadPart(&task->file, tmppage, pageaddr+N_TXTOFF(task->header), 0x1000);
+      LoadPart(&task->file, tmppage, pageaddr+N_TXTOFF(task->header), PAGE_SIZE);
 
       ok = 1;
    }
@@ -269,13 +287,13 @@ ulong aout_pf(uint address)
       // Выделяем страницу...
       tmppage = (ulong*)alloc_first_page();
       // ... и обнуляем ее
-      memset(tmppage, 0, 0x1000);
+      memset(tmppage, 0, PAGE_SIZE);
 
       ok = 1;
    }
 
    if (ok)
-      return (ulong)tmppage;
+      return (ulong)tmppage + PAGE_ATTR;
    else
       return 0;
 }
