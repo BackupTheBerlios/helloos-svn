@@ -1,0 +1,133 @@
+
+ -= HelloOS Educational Project =-
+ -===============================-
+
+  $Id$
+
+
+
+CHANGES IN 0.0i:
+
+   * All paging-specific constants and macroses are defined in pager.h.
+      Pager.c contains functions for dealing with pages, not only
+      memory-manager. Added check for freeing low-memory page.
+
+   * User processes are able to exit via sys_exit. If it returns from main()
+      sys_exit will be called automatically by user_exit_code in head.S. Demo
+      et.c demonstrates it.
+
+   * New type indx_t for indexes
+
+
+
+CHANGES IN 0.0h:
+
+   * Support of multiple binary formats (binfmt.c). Demand loading works for
+      each format.
+
+   * Support of ELF binary format! i386-aout-gcc is not more needed to compile
+      HelloOS. Start file is now compiling into ELF file.
+      No dynamic linking or shared libraries are supported now for ELF, only
+      static files will work. All relocation or dynamic info is ignored.
+      There is common syscalls to load binaries of A.OUT and ELF formats.
+
+   * Fixed bug: %edi and %esi registers now stored across syscalls and
+      interrupts
+
+   * New types in types.h: addr_t and offs_t are synonyms to uint. In the next
+      version i'll replace uint and ulong with these types in many places in
+      order to increase clearness of source code.
+
+   * Ugly mymain.c removed. I think that in future i can remove support of
+      A.OUT binaries because nobody seems to use it in the real world.
+
+
+
+
+CHANGES IN 0.0g:
+
+   * Demand loading of binary files is implemented
+
+
+
+CHNAGES IN 0.0e:
+
+   * All code in start.c now removed from the kernel and placed in 'start.out'
+      file wich will be loaded on startup. start.out uses kernel functions via
+      *ugly*and*buggy* system calls. These syscalls were added *only* to give
+      opportunity to split start.c and will be completely changed next version
+      of the system.
+
+   * All interrupt vectors except IRQ0 (scheduler) are handled via
+      interrupt-gates instead of task-gates
+
+   * Add initializations (fd, fat, scrio, pager) are now called from head.S
+
+   * All initializations now prints some messages on the screen
+
+   * puts() now understands several metasymbols for color selection. New header
+      colors.h now contains color-related constants.
+
+
+
+CHANGES IN 0.0d:
+
+   I decided to skip 'c' version because 90% of code is rewritten since 'b'
+   version (lesser, of course, but i feel that!).
+
+
+   Main changes in 0.0d:
+
+      * Memory model is Completely Rewritten! Now it simular to windows'(r) and
+         linux's model: lower 2Gb is mapped for every process personally and
+         higher 2Gb is a system memory area.
+
+      * Protection: all processes runs with CPL=3 and they cannot touch to the
+         system memory and memory of another process. General protection fault
+         is handled by kernel and process which invokes it will be killed.
+
+      * Simple memory manager is implemented (pager.c). Physical memory is
+         allocated page by page for new processes and freed when process
+         terminates.
+
+      * HelloOS now supports binaries in a.out-format (aout.c)! Only *static*
+         zmagic binaries are supported. All relocation info and symbol table will
+         be ignored. Several console commands have been added to handle
+         a.out-files. See README for details.
+
+      * System calls mechanism is implemented via 0x80 interrupt (like in linux).
+         There are three simple demo syscalls and several demo binaries to use it.
+
+
+   Other minor changes:
+
+      scheduler:
+         * Ugly TaskPool is removed. TSS' will be allocated in separate page when
+            process starts.
+
+      hello_stdio:
+         * Fixed bug with scrolling on boot-up
+         * scroll() is rewritten in asm
+         * puts() and other i/o functions now handles '\t' metasymbol
+         * Fixed bug in printf
+         * Couple of small changes
+
+      hello_string:
+         * several functions are rewritten in asm
+         * memmove added
+
+      fd:
+         * comments fixed
+
+      panic:
+         * added infinity loop for QEmu which ignores "hlt" instruction
+
+      Makefile:
+         * Dependences are now handled via gcc -M, so you need to 'make depend' before
+            'make all'
+
+      fat:
+         * New LoadParts() function to load chunk of the file into the buffer
+
+      New file head.h now contains system constants such as segment selectors, offsets
+         of system structures, etc.
