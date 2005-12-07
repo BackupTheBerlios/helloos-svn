@@ -15,6 +15,7 @@
 #include <helloos/scrio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <helloos/syscall.h>
 
 
 
@@ -45,7 +46,7 @@ void scrio_init(int cur_x, int cur_y)
       for (i = 0; i < 160; i+=2)
       {
          vidmem[24*80*2+i  ] = 0x20;
-         vidmem[24*80*2+i+1] = 0x0a;
+         vidmem[24*80*2+i+1] = 0x0e;
       }
       curr_y--;
 //   }
@@ -213,196 +214,7 @@ void PrintHex(void *val, uchar size)
    }
 }
 
-
-// Реализация стандартного snprintf
-// Сейчас поддерживаются форматы: c, d, p, s, u, x
-// Ширина поля и точность НЕ поддерживаются
-int vsnprintf(char *str, size_t maxlen, const char *format, va_list curp)
-{
-   /*Проверка на конец буффера*/
-#define ifend {if(strpos>=(maxlen-1)){str[maxlen-1]='\0';return strpos;}}
-
-   char c;              // тут,
-   char *pc;            // я
-   //double d;            // думаю,
-   int i, i1;               // всё
-   unsigned int ui, ui1;        // понятно
-   
-   int num;          // понадобятся для подсчёта
-   unsigned int fl;        // количества цифр в числе
-   int j;               // счётчик. юзается часто.
-   int hexnum[]={'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'};
-   
-   unsigned int count=0;            // текущая позиция чтения в format
-   unsigned int strpos=0;           // текущая позиция записи в str  и одновременно количество уже записанных символов
-   
-//   va_list curp;           // читай Кернигана
-//   va_start(curp,format);        // инициализируем
-   
-
-   /* Цикл пошёл */
-   while(format[count]!='\0' && strpos<(maxlen-1))
-   {
-/************************************************************************/
-/**/     if(format[count]!='%')
-      {
-         ifend;
-         str[strpos]=format[count];    // иначе пишем символ и
-         count++;          // увеличиваем
-         strpos++;            // счётчики
-         continue;
-      }
-      switch(format[count+1])
-      {
-/************************************************************************/
-/**/        case '%':
-            ifend;
-            str[strpos]='%';        // пишем '%'
-            count+=2;            // прыгаем на следующий за ним символ
-            strpos++;            // увеличиваем на 1 позицию записи
-            break;
-/************************************************************************/
-/**/        case 'c':
-            ifend;
-            c=va_arg(curp, char);         // читаем его
-            str[strpos]=c;          // пишем
-            strpos++;            // увеличиваем на 1 позицию записи
-            count+=2;            // прыгаем на следующий за ним символ
-            break;
-/************************************************************************/
-/**/        case 'd':
-            ifend;
-            i=va_arg(curp, int);
-            if(i<0)
-            {
-               str[strpos]='-';
-               strpos++;
-               i=-i;
-            }
-            num=1;
-            fl=1;
-//            while(i>=(fl*=10)) num++;     // считаем количество цифр
-//            fl/=10;              // в переменной fl 10 в степени num
-
-            i1 = i;
-            while (i1/10)
-            { i1/=10; fl*=10; num++; }
-
-            j=1;
-            /*пока есть куда писать и что писать*/
-            while(strpos<=(maxlen-2) && j<=num) 
-            {
-               str[strpos]=(i/fl)+'0';    // переводим int в char и пишем в str
-               i%=fl;            // избавляемся от считанной цифры
-               fl/=10;           // понижаем степень 10
-               j++;
-               strpos++;
-            }
-            count+=2;
-            break;
-/************************************************************************/
-/*       case 'f':
-            ifend;
-            d=va_arg(curp, double);
-*/
-/************************************************************************/
-         case 'p':
-            ifend;
-            ui=va_arg(curp, unsigned int);
-            j=28;
-            while(strpos<=(maxlen-2) && j>=0)            // не 0 :(
-            {
-               str[strpos]=hexnum[(ui>>j)&0xf];
-               strpos++;
-               j-=4;
-            }
-            count+=2;
-            break;
-/************************************************************************/
-/**/        case 's':
-            ifend;
-            pc=va_arg(curp, char *);
-            j=0;
-            /*копируем pc[] в str[]*/
-            while(strpos<=(maxlen-2) && pc[j]!=0)
-            {
-               str[strpos]=pc[j];
-               strpos++;
-               j++;
-            }
-            count+=2;
-            break;
-/************************************************************************/
-/**/        case 'u':
-            ifend;
-            ui=va_arg(curp, unsigned int);
-            num=1;
-            fl=1;
-//            while(ui>=(fl*=10)) num++;    
-//            fl/=10;              
-
-            ui1 = ui;
-            while (ui1/10)                // считаем количество цифр
-            { ui1/=10; fl*=10; num++; }   // в переменной fl 10 в степени num-1
-
-            j=1;
-            /*пока есть куда писать и что писать*/
-            while(strpos<=(maxlen-2) && j<=num) 
-            {
-               str[strpos]=(ui/fl)+'0';   // переводим int в char и пишем в str
-               ui%=fl;           // избавляемся от считанной цифры
-               fl/=10;           // понижаем степень 10
-               j++;
-               strpos++;
-            }
-            count+=2;
-            break;
-/************************************************************************/
-/**/        case 'x':
-            ifend;
-            ui=va_arg(curp, unsigned int);
-            if(ui==0)
-            {
-               str[strpos]='0';        // если 0, то просто пишем его
-               count+=2;
-               strpos++;
-               break;
-            }
-            else
-            {
-               j=28;
-               while(strpos<=(maxlen-2) && j>=0)   // не 0 :(
-               {
-                  if((ui>>j))      // цифру делаем младшей и отделяем её
-                  {
-                     str[strpos]=hexnum[(ui>>j)&0xf];
-                     strpos++;
-                  }
-                  j-=4;
-               }
-               count+=2;
-               break;
-            }
-/************************************************************************/
-         default:
-            break;
-      }
-   }
-   ifend;
-   str[strpos]='\0';
-   return strpos;
-}
-
-int snprintf(char *str, size_t maxlen, const char *format, ...)
-{
-   va_list curp;
-   va_start(curp, format);
-   uint res = vsnprintf(str, maxlen, format, curp);
-   va_end(curp);
-   return res;
-}
-
-
+#include <lib/stdio.inc>
 
 // Тупая реализация стандартного vprintf с поддержкой цвета
 // Используется vsnprintf, а затем puts
@@ -447,17 +259,144 @@ int printf(char *format, ...)
 
 
 
-// Считать один символ с клавиатуры
-// Сейчас это реализовано крайне тупо: просто ждем пока
-// в порту клавиатуры не сменится значение.
-// Когда-нибудь здесь будет нормальная таблица скан-кодов,
-// буфер клавиатуры и проч.
-//char get_char()
-//{
-//   return 0;
-//}
+char scanmap[] = 
+{
+   '\0', // 0x00
+   '\0', // 0x01
+   '1' , // 0x02
+   '2' , // 0x03
+   '3' , // 0x04
+   '4' , // 0x05
+   '5' , // 0x06
+   '6' , // 0x07
+   '7' , // 0x08
+   '8' , // 0x09
+   '9' , // 0x0a
+   '0' , // 0x0b
+   '\0', // 0x0c
+   '\0', // 0x0d
+   0x08, // 0x0e
+   '\0', // 0x0f
+   'q' , // 0x10
+   'w' , // 0x11
+   'e' , // 0x12
+   'r' , // 0x13
+   't' , // 0x14
+   'y' , // 0x15
+   'u' , // 0x16
+   'i' , // 0x17
+   'o' , // 0x18
+   'p' , // 0x19
+   '[' , // 0x1a
+   ']' , // 0x1b
+   0x0d, // 0x1c
+   '\0', // 0x1d
+   'a' , // 0x1e
+   's' , // 0x1f
+   'd' , // 0x20
+   'f' , // 0x21
+   'g' , // 0x22
+   'h' , // 0x23
+   'j' , // 0x24
+   'k' , // 0x25
+   'l' , // 0x26
+   ';' , // 0x27
+   '\'', // 0x28
+   '`' , // 0x29
+   '\0', // 0x2a
+   '\0', // 0x2b
+   'z', // 0x2c
+   'x', // 0x2d
+   'c', // 0x2e
+   'v', // 0x2f
+   'b', // 0x30
+   'n', // 0x31
+   'm', // 0x32
+   ',', // 0x33
+   '.', // 0x34
+   '/', // 0x35
+   '\0', // 0x36
+   '\0', // 0x37
+   '\0', // 0x38
+   ' ', // 0x39
+   '\0', // 0x3a
+   '\0', // 0x3b
+   '\0', // 0x3c
+   '\0', // 0x3d
+   '\0', // 0x3e
+   '\0', // 0x3f
+   '\0', // 0x40
+   '\0', // 0x41
+   '\0', // 0x42
+   '\0', // 0x43
+   '\0', // 0x44
+   '\0', // 0x45
+   '\0', // 0x46
+   '\0', // 0x47
+   '\0', // 0x48
+   '\0', // 0x49
+   '\0', // 0x4a
+   '\0', // 0x4b
+   '\0', // 0x4c
+   '\0', // 0x4d
+   '\0', // 0x4e
+   '\0', // 0x4f
+   '\0', // 0x50
+   '\0', // 0x51
+   '\0', // 0x52
+   '\0', // 0x53
+   '\0', // 0x54
+   '\0', // 0x55
+   '\0', // 0x56
+   '\0', // 0x57
+   '\0', // 0x58
+   '\0', // 0x59
+   '\0', // 0x5a
+   '\0', // 0x5b
+   '\0', // 0x5c
+   '\0', // 0x5d
+   '\0', // 0x5e
+   '\0', // 0x5f
+   '\0', // 0x60
+   '\0', // 0x61
+   '\0', // 0x62
+   '\0', // 0x63
+   '\0', // 0x64
+   '\0', // 0x65
+   '\0', // 0x66
+   '\0', // 0x67
+   '\0', // 0x68
+   '\0', // 0x69
+   '\0', // 0x6a
+   '\0', // 0x6b
+   '\0', // 0x6c
+   '\0', // 0x6d
+   '\0', // 0x6e
+   '\0', // 0x6f
+   '\0', // 0x70
+   '\0', // 0x71
+   '\0', // 0x72
+   '\0', // 0x73
+   '\0', // 0x74
+   '\0', // 0x75
+   '\0', // 0x76
+   '\0', // 0x77
+   '\0', // 0x78
+   '\0', // 0x79
+   '\0', // 0x7a
+   '\0', // 0x7b
+   '\0', // 0x7c
+   '\0', // 0x7d
+   '\0', // 0x7e
+   '\0', // 0x7f
+};
 
-
+char scan2ascii(byte scancode)
+{
+   if (scancode > sizeof(scanmap))
+      return '\0';
+   return scanmap[scancode];
+}
 
 
 void readline(char *cmd, uint buf_size)
@@ -475,9 +414,10 @@ void readline(char *cmd, uint buf_size)
       if (c1 != c2)
       {
          c2 = c1;
+         c1 = scan2ascii(c1);
          switch (c1)
          {
-            case 0x0e:
+            case 0x08:
                if (cmdlen > 0)
                {
                   cmdlen--;
@@ -487,57 +427,41 @@ void readline(char *cmd, uint buf_size)
                   curr_x = nx; curr_y = ny;
                }
                break;
-            case 0x02: cmd[cmdlen++] = '1'; puts("1");break;
-            case 0x03: cmd[cmdlen++] = '2'; puts("2");break;
-            case 0x04: cmd[cmdlen++] = '3'; puts("3");break;
-            case 0x05: cmd[cmdlen++] = '4'; puts("4");break;
-            case 0x06: cmd[cmdlen++] = '5'; puts("5");break;
-            case 0x07: cmd[cmdlen++] = '6'; puts("6");break;
-            case 0x08: cmd[cmdlen++] = '7'; puts("7");break;
-            case 0x09: cmd[cmdlen++] = '8'; puts("8");break;
-            case 0x0a: cmd[cmdlen++] = '9'; puts("9");break;
-            case 0x0b: cmd[cmdlen++] = '0'; puts("0");break;
-            case 0x10: cmd[cmdlen++] = 'q'; puts("q");break;
-            case 0x11: cmd[cmdlen++] = 'w'; puts("w");break;
-            case 0x12: cmd[cmdlen++] = 'e'; puts("e");break;
-            case 0x13: cmd[cmdlen++] = 'r'; puts("r");break;
-            case 0x14: cmd[cmdlen++] = 't'; puts("t");break;
-            case 0x15: cmd[cmdlen++] = 'y'; puts("y");break;
-            case 0x16: cmd[cmdlen++] = 'u'; puts("u");break;
-            case 0x17: cmd[cmdlen++] = 'i'; puts("i");break;
-            case 0x18: cmd[cmdlen++] = 'o'; puts("o");break;
-            case 0x19: cmd[cmdlen++] = 'p'; puts("p");break;
-            case 0x1A: cmd[cmdlen++] = '['; puts("[");break;
-            case 0x1B: cmd[cmdlen++] = ']'; puts("]");break;
-            case 0x1C:
-                       puts("\n");
-                       cmd[cmdlen] = 0;
-                       stop = 1;
-                       break;
-            case 0x1E: cmd[cmdlen++] = 'a'; puts("a");break;
-            case 0x1F: cmd[cmdlen++] = 's'; puts("s");break;
-            case 0x20: cmd[cmdlen++] = 'd'; puts("d");break;
-            case 0x21: cmd[cmdlen++] = 'f'; puts("f");break;
-            case 0x22: cmd[cmdlen++] = 'g'; puts("g");break;
-            case 0x23: cmd[cmdlen++] = 'h'; puts("h");break;
-            case 0x24: cmd[cmdlen++] = 'j'; puts("j");break;
-            case 0x25: cmd[cmdlen++] = 'k'; puts("k");break;
-            case 0x26: cmd[cmdlen++] = 'l'; puts("l");break;
-            case 0x27: cmd[cmdlen++] = ';'; puts(";");break;
-            case 0x28: cmd[cmdlen++] = '\''; puts("'");break;
-            case 0x29: cmd[cmdlen++] = '`'; puts("`");break;
-            case 0x2C: cmd[cmdlen++] = 'z'; puts("z");break;
-            case 0x2D: cmd[cmdlen++] = 'x'; puts("x");break;
-            case 0x2E: cmd[cmdlen++] = 'c'; puts("c");break;
-            case 0x2F: cmd[cmdlen++] = 'v'; puts("v");break;
-            case 0x30: cmd[cmdlen++] = 'b'; puts("b");break;
-            case 0x31: cmd[cmdlen++] = 'n'; puts("n");break;
-            case 0x32: cmd[cmdlen++] = 'm'; puts("m");break;
-            case 0x33: cmd[cmdlen++] = ','; puts(",");break;
-            case 0x34: cmd[cmdlen++] = '.'; puts(".");break;
-            case 0x35: cmd[cmdlen++] = '/'; puts("/");break;
-            case 0x39: cmd[cmdlen++] = ' '; puts(" ");break;
+            case 0x0d:
+               puts("\n");
+               cmd[cmdlen] = 0;
+               stop = 1;
+               break;
+            case '\0': break;
+            default:
+               cmd[cmdlen++] = c1; nputs(&c1, 1);
+               break;
          }
       }
    }
+}
+
+
+char syscall_getchar(uint x, uint y)
+{
+   return vidmem[y*cols*2+x*2];
+}
+
+uint syscall_setchar(uint x, uint y, char c)
+{
+   vidmem[y*cols*2+x*2] = c;
+   return 0;
+}
+
+uint syscall_setattr(uint x, uint y, byte a)
+{
+   vidmem[y*cols*2+x*2+1] = a;
+   return 0;
+}
+
+uint syscall_screen_info(uint *w, uint *h)
+{
+   memcpy_to_user(w, &cols, sizeof(cols));
+   memcpy_to_user(h, &lines,sizeof(lines));
+   return 0;
 }

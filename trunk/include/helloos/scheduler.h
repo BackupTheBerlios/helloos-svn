@@ -17,9 +17,9 @@
 #include <helloos/io.h>
 #include <helloos/head.h>
 #include <helloos/fat.h>
-#include <helloos/aout.h>
 #include <helloos/elf.h>
 #include <helloos/binfmt.h>
+#include <helloos/ipc.h>
 #include <config.h>
 
 // Эта структура будет хранить TSS задачи. Это лучше чем
@@ -57,11 +57,26 @@ struct _TSSStruct
 };
 
 
+// Частота процессора в килогерцах
+extern uint cpu_khz;
+
+
+// Константы состояний процесса
+
+// Выполняется
+#define PS_RUNNING      0
+// Ожидает завершения другого процесса
+#define PS_WAITPID      1
+// Ожидает значения общей переменной
+#define PS_WAITCOMVAR   2
+//// Спит
+//#define PS_WAITSLEEP    3
+
+
 // Эта структура будет хранить контекст задачи. То что
 // по науке называется дескриптором процесса будет просто
 // указателем на контекст.
-typedef struct _TaskStruct TaskStruct;
-struct _TaskStruct
+typedef struct
 {
    // TSS задачи
    TSSStruct tss;
@@ -72,19 +87,34 @@ struct _TaskStruct
    // Идентификатор
    ulong pid;
 
+   // Состояние процесса
+   ulong state;
+
+   // Данные для ожидания
+   union
+   {
+      // Если state==PS_WAITPID, то здесь хранится
+      // pid интересующего процесса
+      ulong pid;
+      struct
+      {
+         char name[MAX_VAR_NAME];
+         uint value;
+      } comvar;
+   } waitfor;
+
    // Дескриптор файла. Нужен для demand-loading.
    DirEntry file;
 
    uchar BinFormat;
-   // Заголовок a.out
-   Exec header;
 
+   // Заголовки для elf
    Elf32_Ehdr elf_header;
    Elf32_Phdr pheaders[5];
 
    // Этот массив будет служить стеком для системных вызовов
    uchar syscall_stack[3024];
-};
+} TaskStruct;
 
 
 // Вызывает прерывание таймера. Используется для принудительного
@@ -95,8 +125,6 @@ struct _TaskStruct
 // Иницилизация многозадачности
 void init_scheduler();
 
-// Тупое создание процесса. Убрать на фиг.
-void scheduler_dbg(ulong addr);
 
 
 // Переменные, полезные другим модулям

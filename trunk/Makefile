@@ -19,7 +19,7 @@
 #  emu:		создает образ и запускает его в эмуляторе Bochs
 #  	(!! поставьте правильные пути к bios в emulate.txt !!)
 #
-#  qemu:		создает образ и запускает его в эмуляторе QEmu
+#  qemu:	создает образ и запускает его в эмуляторе QEmu
 #
 #  clean:	рекурсивно подчищает все бинарники и временные
 #  	файлы
@@ -30,14 +30,15 @@
 
 VER_MAJOR = 0
 VER_MINOR = 0
-VER_ALPHA = i
+VER_ALPHA = j
 
 
 .EXPORT_ALL_VARIABLES:
 
-INCLUDES = -I../include -I../config
+INCLUDES = -I../include -I../config -I..
 CFLAGS = -O2 -nostdlib -ffreestanding -W -Wall -save-temps $(INCLUDES) \
-			-DVER_MAJOR=$(VER_MAJOR) -DVER_MINOR=$(VER_MINOR) -DVER_ALPHA=\'$(VER_ALPHA)\' -Werror
+			-DVER_MAJOR=$(VER_MAJOR) -DVER_MINOR=$(VER_MINOR) -DVER_ALPHA=\"$(VER_ALPHA)\"
+#-Werror
 AOUT_CFLAGS = $(CFLAGS)
 
 
@@ -55,7 +56,7 @@ subdirs:
 
 
 
-FILES = kernel/hello start/start user/test.elf user/gp.elf user/pf.elf user/et.elf
+FILES = kernel/hello start/start user/{test,cat,ls,xo,waitvar,setvar} test.txt
 
 image: subdirs
 	dd if=/dev/zero of=image bs=512 count=2880
@@ -75,7 +76,7 @@ emu: image
 	bochs -qf emulate.txt
 
 qemu: image
-	qemu -fda image
+	qemu -m 16 -fda image
 
 
 clean:

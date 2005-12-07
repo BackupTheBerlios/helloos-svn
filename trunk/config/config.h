@@ -42,12 +42,15 @@
 #define CFG_SCHED_HZ             200
 
 
-// Объем памяти в 4k-страницах  (4*1024=16mb)
-#define CFG_MEM_SIZE             (4*1024)
+// Объем памяти в 4k-страницах  (2*1024=8mb)
+#define CFG_MEM_SIZE             (2*1024)
 
 // Объем "нижней" памяти, не подлежащей распределению
 // и предназначенной для ядра (256=1mb)
 #define CFG_LOW_MEM              (256)
+
+
+#define CFG_MAX_COM_VARS         30
 
 
 #endif // __CONFIG_H

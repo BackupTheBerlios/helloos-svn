@@ -9,20 +9,14 @@ COMPILING HelloOS
 
    In order to compile HelloOS you will need following tools:
       * Make
-         Actually, you *can* compile without it, by
-         your own /dev/hands.
+         Actually, you *can* compile without it, by your own
+         /dev/hands.
 
       * GCC C-compiler
          Some parts of the code (especially inline asm) are
          gcc-specific and probably wont to compile with other
          tools. If you are able to compile HelloOS without gcc
          please let me know!
-
-      * GCC C-compiler for i386-aout target
-         To compile demo programs for HelloOS you have to install
-         gcc for i386-aout, because HelloOS only supports the
-         a.out binary format. But you're able to compile HelloOS
-         without these demos, but it will be not so interesting.
 
       * dev86 package (as86 and ld86)
          Bootsector if written with as86 assembler. I think it
@@ -34,22 +28,13 @@ COMPILING HelloOS
       In result you'll receive these files:
          * boot.bin     - bootsector for FAT12-floppy
          * hello        - HelloOS' kernel
-         * start.out    - main() function ;) (like init in linux)
-         * test.out, gp.out   - demo binaries in a.out-format, can
+         * start        - main() function ;) (like init in linux)
+         * user/        - demo binaries in this folder cat
                                  be runned with 'exe <filename>'
                                  console command under HelloOS
 
       If you will not run 'make depend' it'll compile anyway but
       there is can be some warnings.
-
-      In standard source and binary distribution of version 0.0d
-      there are two demo programs: 'test.out' and 'gp.out'. Both
-      of these binaries are compiled from one C-program 'test.c'.
-      Both of the programs just blinks with screen characters in
-      bottom line. It sounds too easy, but it costs me several
-      long long nights...  There is only difference between 'test.out'
-      and 'gp.out': the second one invokes General Protection Fault
-      after half-second ;) HelloOS must handle this gracefully.
 
 
 INSTALLING
@@ -68,7 +53,7 @@ INSTALLING
       russian ;) ).
 
 WWW
-      Visit our site: http://helloos.berlios.de and HelloOS's
+      Visit our site: http://helloos.berlios.de and HelloOS'
       project page on http://developer.berlios.de/projects/helloos.
       There you can find latest releases of HelloOS, bug tracking
       system, get support and get latest testing sources snapshot
@@ -93,25 +78,12 @@ These commands are supported in the console:
    * pages <pid> - prints memory usage by process with specified PID
                   (see 'ps' list)
 
-   * panic     -  invokes the System Panic ;)
-
-   * reboot    -  reboots the computer
-
    * gp        -  invokes General Protection Fault in main process.
                   Main process will be killed after it.
-
-   * fat       -  invokes the simple FAT browser. It is no way
-                  to leave it. (*disabled in this version*)
-
-   * dbg       -  invokes the debugger when running under Bochs
-
-   * cli       -  disables interrupts (and stops all processes
-                  except the main one)
-
-   * sti       -  enables interrupts
 
    * beep      -  invokes a beeeep with PC-speaker. It is no
                   way to stop it.
 
    * cpu       -  prints some information about your CPU
 
+   * help      -  List of other console commands

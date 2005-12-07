@@ -27,7 +27,7 @@ bool elf_is(char *Name);
 // Напечатать заголовки ELF
 void elf_info(char *Name);
 // Запустить файл
-void elf_load(char *Name);
+uint elf_load(char *Name, char *arg);
 // Обработчик #PF для ELF-бинарников
 addr_t elf_pf(addr_t address);
 

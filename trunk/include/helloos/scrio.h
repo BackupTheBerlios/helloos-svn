@@ -62,4 +62,6 @@ int printf(char *format, ...);
 // Цветной printf
 int printf_color(uchar attr, char *format, ...);
 
+char scan2ascii(byte);
+
 #endif // __HELLO_STDIO_H

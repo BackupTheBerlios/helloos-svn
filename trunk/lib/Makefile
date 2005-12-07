@@ -1,4 +1,4 @@
-OBJS = string.o
+OBJS = string.o stdio.o
 
 all: $(OBJS)
 

@@ -12,45 +12,6 @@
 
 #include <helloos/types.h>
 
-void *memcpy(void *dest, const void *src, size_t n)
-{
-   __asm__(
-         "movl %0, %%edi\n"
-         "movl %1, %%esi\n"
-         "cld\n"
-         "rep movsb\n"
-         ::"m"(dest), "m"(src), "c"(n) : "si", "di");
-   return dest;
-}
-
-
-// FIXME: Надо бы получше разобраться с asm-вставками...
-void *memmove(uchar *dest, const uchar *src, size_t n)
-{
-   uint d1, d2;
-   if (dest < src)
-      __asm__ volatile(
-            "movl %0, %%edi\n"
-            "movl %1, %%esi\n"
-            "cld\n"
-            "rep movsb\n"
-            ::"m"(dest),
-              "m"(src),
-              "c"(n));
-   else
-      __asm__ volatile(
-            "movl %0, %%edi\n"
-            "movl %1, %%esi\n"
-            "std\n"
-            "rep movsb\n"
-            :"=D"(d1),
-             "=S"(d2)
-            :"0"(dest+n-1),
-             "1"(src +n-1),
-             "c"(n));
-   return dest;
-}
-
 
 void *memset(void *s, int c, size_t n)
 {
@@ -82,9 +43,72 @@ int strncmp(char *a, char *b, uint n)
 }
 
 
+char *strchr(char *s, int c)
+{
+   while (*s && *s != c) s++;
+   if (*s)
+      return s;
+   else
+      return 0;
+}
+
+
+void *memcpy(void *dest, void *src, size_t size)
+{
+   __asm__(
+         "mov %%cl, %%al\n"
+         "shr $2, %%ecx\n"
+         "cld\n"
+         "rep movsl\n"
+         "and $0x3, %%al\n"
+         "mov %%al, %%cl\n"
+         "rep movsb\n"
+         :"=D"(dest),"=S"(src),"=c"(size):"D"(dest), "S"(src), "c"(size));
+   return dest;
+}
+
 int strlen(char *s)
 {
-   uint n = 0;
-   while (*(s++) != '\0') n++;
-   return n;
+   int res;
+   __asm__(
+         "xor %%al, %%al\n"
+         "xor %%ecx, %%ecx\n"
+         "dec %%ecx\n"
+         "cld\n"
+         "repne scasb\n"
+         "not %%ecx\n"
+         "dec %%ecx\n"
+         :"=D"(s),"=c"(res):"D"(s));
+   return res;
+}
+
+void *memmove(void *dest, void *src, size_t size)
+{
+   __asm__(
+         "mov %%cl, %%al\n"
+         "shr $2, %%ecx\n"
+         "cmp %%esi, %%edi\n"
+         "ja n1\n"
+         "  cld\n"
+         "  rep movsl\n"
+         "  and $0x3, %%al\n"
+         "  mov %%al, %%cl\n"
+         "  rep movsb\n"
+         "  jmp goend\n"
+         "n1:\n"
+         "  add %%ebx, %%edi\n"
+         "  add %%ebx, %%esi\n"
+         "  sub $4, %%edi\n"
+         "  sub $4, %%esi\n"
+         "  std\n"
+         "  rep movsl\n"
+         "  and $0x3, %%al\n"
+         "  add $0x3, %%edi\n"
+         "  add $0x3, %%esi\n"
+         "  mov %%al, %%cl\n"
+         "  rep movsb\n"
+         "goend:\n"
+         :"=D"(dest),"=S"(src),"=c"(size):"D"(dest),"S"(src),"c"(size),
+               "b"(size));
+   return dest;
 }

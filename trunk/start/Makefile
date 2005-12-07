@@ -1,4 +1,4 @@
-OBJS = start.o ../lib/string.o
+OBJS = start.o ../lib/string.o ../lib/stdio.o
 
 all: start
 

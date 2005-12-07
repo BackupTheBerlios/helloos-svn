@@ -23,24 +23,31 @@
 
 #include <helloos/binfmt.h>
 
-#include <helloos/aout.h>
 #include <helloos/elf.h>
 #include <helloos/scheduler.h>
 #include <helloos/scrio.h>
 #include <helloos/pager.h>
+#include <helloos/panic.h>
 #include <string.h>
 
+
+#define MAX_SYS_PAGEREFS   10
+
+
+SysPageTableRef sys_pagerefs[MAX_SYS_PAGEREFS] = { {0x200, 0x3000}, {0x201, 0x4000}};
+ushort sys_pagerefs_n = 2;
+
+void add_sys_pageref(ushort index, ulong address)
+{
+   if (++sys_pagerefs_n >= MAX_SYS_PAGEREFS)
+      panic("Too many sys_pagerefs!\n");
+   sys_pagerefs[sys_pagerefs_n-1].index_in_catalog = index;
+   sys_pagerefs[sys_pagerefs_n-1].table_address = address;
+}
 
 // Структура описывает форматы бинарных файлов
 BinFmt BinFormats[BIN_N] = 
 {
-   {  // BIN_AOUT
-      .FormatName = "A.OUT",
-      .is = aout_is,
-      .dump_info = aout_info,
-      .load_bin = aout_load,
-      .load_page = aout_pf,
-   },
    {  // BIN_ELF
       .FormatName = "ELF",
       .is = elf_is,
@@ -75,16 +82,16 @@ bool bin_dump_info(char *name)
 }
 
 // Запустить бинарник
-bool bin_load_bin(char *name)
+// Возвращает его PID или (uint)-1 в случае неудачи
+uint bin_load_bin(char *name, char *arg)
 {
    int type = bin_type(name);
    if (type != -1)
    {
-      BinFormats[type].load_bin(name);
-      return 1;
+      return BinFormats[type].load_bin(name, arg);
    }
    else
-      return 0;
+      return -1;
 }
 
 

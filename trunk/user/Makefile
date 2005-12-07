@@ -1,24 +1,16 @@
-all: test.elf gp.elf pf.elf et.elf
+BINS = test cat ls xo waitvar setvar
 
-%.elf: %.o
-	ld -M -e main -o $@ $< >map.$<.txt
+all: $(BINS)
 
-gp.o: test.c
-	gcc $(CFLAGS) -O1 -DINVOKE_GP -c $< -o $@
-
-pf.o: test.c
-	gcc $(CFLAGS) -O1 -DINVOKE_PF -c $< -o $@
-
-
-et.elf: et.o
-	ld -e main et.o -o et.elf
+%: %.o
+	ld -M -e main -o $@ $< ../lib/stdio.o ../lib/string.o >map.$<.txt
 
 .c.o:
 	gcc $(CFLAGS) -O1 -c $< -o $@
 
 
 clean:
-	rm -f *.{i,s,o} *~ *.elf *.o depend map.*.txt
+	rm -f *.{i,s,o} *~ $(BINS) *.o depend map.*.txt
 
 depend:
 	for i in *.[cS]; do gcc -M $(CFLAGS) $$i; done >depend

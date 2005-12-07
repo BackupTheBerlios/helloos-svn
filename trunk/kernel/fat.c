@@ -26,6 +26,9 @@
 #include <helloos/scrio.h>
 #include <string.h>
 #include <helloos/types.h>
+#include <helloos/pager.h>
+#include <helloos/syscall.h>
+#include <stdio.h>
 
 
 
@@ -303,13 +306,13 @@ void DirIterate(ulong Cluster, DirCallback Callback, void *Data)
    //free(Sectors);
 }
 
+uchar Sectors[224*32];
 
 void RootDirIterate(DirCallback Callback, void *Data)
 {
    if (Type == FAT12  ||  Type == FAT16)
    {
 //      uchar *Sectors = (uchar*) malloc(bpb->BytsPerSec * RootDirSectors);
-      static uchar Sectors[224*32];
 //      uchar Sectors[bpb->BytsPerSec*RootDirSectors];
       DirEntry *Entry = (DirEntry*) Sectors;
       LoadSectorsFromDisk(bpb->RsvdSecCnt + FATSz * bpb->NumFATs, RootDirSectors, Sectors);
@@ -367,16 +370,15 @@ void FileIterate(DirEntry *Entry, FileCallback Callback, void *Data)
 {
    ulong Size = Entry->FileSize;
    ulong Cluster = GetEntryCluster(Entry);
-   //uchar *Sectors = (uchar*) malloc(bpb->BytsPerSec * bpb->SecPerClus);
-   static uchar Sectors[512];//bpb->BytsPerSec * bpb->SecPerClus];
-   //uchar Sectors[bpb->BytsPerSec * bpb->SecPerClus];
 
-   LoadSectorsFromDisk(ClusterToSector(Cluster), bpb->SecPerClus, Sectors);
+   byte *TmpPage = (byte*)alloc_first_page();
+
+   LoadSectorsFromDisk(ClusterToSector(Cluster), bpb->SecPerClus, TmpPage);
    while (Size > (unsigned int )bpb->BytsPerSec * bpb->SecPerClus)
    {
-      if (! Callback(Sectors, bpb->BytsPerSec * bpb->SecPerClus, Data))
+      if (! Callback(TmpPage, bpb->BytsPerSec * bpb->SecPerClus, Data))
       {
-         //free(Sectors);
+         free_page((addr_t)TmpPage);
          return;
       }
 
@@ -386,14 +388,15 @@ void FileIterate(DirEntry *Entry, FileCallback Callback, void *Data)
       if ((Cluster == 0) || IsEOC(Cluster) || IsBad(Cluster))
       {
          puts("Unexpected clusterchain termination!\n");
-         //free(Sectors);
+         free_page((addr_t)TmpPage);
          return;
       }
-      LoadSectorsFromDisk(ClusterToSector(Cluster), bpb->SecPerClus, Sectors);
+      LoadSectorsFromDisk(ClusterToSector(Cluster), bpb->SecPerClus, TmpPage);
    }
 
-   Callback(Sectors, Size, Data);
+   Callback(TmpPage, Size, Data);
 
+   free_page((addr_t)TmpPage);
    //free(Sectors);
 }
 
@@ -658,4 +661,111 @@ void fat_main()
 
 
    return;
+}
+
+
+
+
+
+
+
+
+
+// Системный вызов find_file
+// Ищет файл или каталог с данным 8.3-именем и заполняет структуру DirEntry
+// Возвращает первый кластер файла и (uint)-1 в случае неудачи
+uint syscall_find_file(uint dir, char *name83, DirEntry *fileentry)
+{
+   char locname[11];
+   memcpy_from_user(locname, name83, 11);
+   DirEntry locentry;
+   uint res = FindEntry(dir, locname, &locentry);
+   memcpy_to_user(fileentry, &locentry, sizeof(DirEntry));
+   return res;
+}
+
+
+
+bool user_load_file(uchar *Block, ulong len, LoadPartData *Data)
+{
+   if (Data->filepos >= Data->start + Data->len)
+      return 0;
+
+   if (Data->filepos + len >= Data->start)
+   {
+      uint s = (Data->start > Data->filepos) ? (Data->start - Data->filepos) : 0;
+      uint n = len - s;
+      if (n > Data->len-Data->bufpos) n = Data->len - Data->bufpos;
+      memcpy_to_user(&Data->Buf[Data->bufpos], &Block[s], n);
+      Data->bufpos += n;
+   }
+   
+
+   Data->filepos += len;
+   return 1;
+}
+
+// Системный вызов file_load
+// Загружает кусок файла, заданный структурой chunk в буфер Buf
+// Если chunk == 0, то загружается весь файл
+// Возвращает размер загруженного куска, который может быть меньше
+// чем chunk.length в случае, если файл закончится раньше чем
+// заполнится буфер
+uint syscall_file_load(DirEntry *Entry, byte *Buf, FileChunk *chunk)
+{
+   FileChunk locchunk;
+   if (chunk)
+      memcpy_from_user(&locchunk, chunk, sizeof(FileChunk));
+   LoadPartData Data = {
+      .start = chunk == 0 ? 0 : locchunk.start,
+      .len = chunk == 0 ? (uint)-1 : locchunk.length,
+      .Buf = Buf,
+      .bufpos = 0,
+      .filepos = 0
+   };
+   DirEntry locentry;
+   memcpy_from_user(&locentry, Entry, sizeof(DirEntry));
+   FileIterate(&locentry, (FileCallback)user_load_file, &Data);
+   return Data.bufpos;
+}
+
+
+
+
+
+typedef struct
+{
+   DirEntry *buf;
+   uint size;
+   uint bufpos;
+   uint count;
+} DirLoadData;
+
+bool DirLoadCallback(DirEntry *Entry, DirLoadData *Data)
+{
+   if (Data->count < Data->size)
+      memcpy_to_user(&Data->buf[Data->bufpos], Entry, sizeof(DirEntry));
+   Data->bufpos++;
+   Data->count++;
+   return 1;
+}
+
+// Системный вызов dir_load
+// Заполняет массив Buf структурами для каждого дочернего файла или каталога
+// каталога, заданного параметром dir
+// size определяет количество элементов в структуре Buf
+// Если size меньше количество элементов каталога, то загружается только
+// size первых элементов
+// Возвращает полное количество элементов в каталоге
+uint syscall_dir_load(uint dir, DirEntry *Buf, uint size)
+{
+   DirLoadData Data =
+   {
+      .buf = Buf,
+      .size = size,
+      .bufpos = 0,
+      .count = 0
+   };
+   DirIterate(dir, (DirCallback)DirLoadCallback, &Data);
+   return Data.count;
 }

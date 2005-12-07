@@ -16,6 +16,7 @@
 #include <config.h>
 #include <helloos/scheduler.h>
 #include <helloos/head.h>
+#include <helloos/ipc.h>
 
 #include <helloos/scrio.h>
 #include <string.h>
@@ -24,7 +25,7 @@
 #include <helloos/pager.h>
 
 
-// Код для PIT-таймера. См. доки.
+// Код для PIT-таймера. См. [3]
 #define TIMER_VALUE  (1193180L/CFG_SCHED_HZ)
 
 
@@ -53,12 +54,8 @@ void init_scheduler()
    outb(TIMER_VALUE & 0xff, 0x40);
    outb(TIMER_VALUE >> 8, 0x40);
 
-   // Все остальное для первой задачи уже сделано
-//   Task[0]->pid = 0;
-//   CurPID = 1;
    CurPID = 0;
    Current = 0;
-//   NTasks = 1;
    NTasks = 0;
 }
 
@@ -99,13 +96,21 @@ void scheduler_kill(ulong pid)
          free_page(task->tss.cr3);
          free_page((ulong)task);
 
-         printf_color(0x4, "\n%d pages freed\n", pagecount);
+         printf_color(0x4, "%d pages freed\n", pagecount);
 
          if (NTasks <= 1) // Система осталась без процессов :(
             return panic("Heh... Last process has died...\n");
          Task[i] = Task[NTasks-1];
          NTasks--;
          if (Current >= NTasks) Current = 0;
+
+         // Оживляем все процессы, которые ожидали завершения текущего
+         uint p;
+         for (p = 0; p < NTasks; p++)
+            if (Task[p]->state == PS_WAITPID &&
+                Task[p]->waitfor.pid == pid)
+               Task[p]->state = PS_RUNNING;
+
          // Вызываем смену задачи, на случай, если убили текущий процесс
          CALL_SCHEDULER; // Над этим надо еще подумать
          return;
@@ -162,7 +167,6 @@ void scheduler_pages(ulong pid)
          printf("Process size:\t%d\n", user+sys);
       }
    }
-   printf("\n");
 }
 
 
@@ -176,7 +180,11 @@ void scheduler()
 {
    if (NTasks == 0)
       return panic("No processes!");
-   Current = (Current+1)%NTasks;
+
+   do
+   {
+      Current = (Current+1)%NTasks;
+   } while (Task[Current]->state != PS_RUNNING);
 
    irq0_tss.tl = Task[Current]->tsss;
 
@@ -187,7 +195,7 @@ void scheduler()
 // идентификатор, номер сегмента TSS и адрес каталога страниц.
 void scheduler_ps()
 {
-   printf("PID\tFILENAME\tTSSs\tPG_DIR\n");
+   printf("PID\tFileName\tState\n");
 
    uint i;
    uchar name83[12];
@@ -199,10 +207,17 @@ void scheduler_ps()
       for (j = 0; j < 11; j++)
          if (name83[j] == 0)
             name83[j] = ' ';
-      printf("%d\t%s\t%xh\t%xh\n",
-            Task[i]->pid,
-            &name83,
-            Task[i]->tsss,
-            PAGE_ADDR(Task[i]->tss.cr3));
+      printf("%d\t%s\t", Task[i]->pid, name83);
+      switch (Task[i]->state)
+      {
+         case PS_RUNNING: puts("running"); break;
+         case PS_WAITPID: printf("waiting pid=%d", Task[i]->waitfor.pid); break;
+         case PS_WAITCOMVAR: printf("waiting \"%s\"=%d", Task[i]->waitfor.comvar.name,
+                                                     Task[i]->waitfor.comvar.value);
+                             break;
+         default:
+                             puts("Unknown?!");
+      }
+      puts("\n");
    }
 }

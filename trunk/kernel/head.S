@@ -284,24 +284,29 @@ rp_sidt:
 
    call fd_init
    call fat_init
+   call ipc_init
 
    push $loading_start_msg
    call puts
    add $4, %esp
 
+   push $startarg
    push $startfilename
    call bin_load_bin
-   add $4, %esp
+   add $8, %esp
 
 
 // Записываем планировщик как обработчик IRQ0
 // Раньше этого нельзя было сделать, т.к. он сразу
 // попытался бы переключится на отсутствующую задачу
+cli
    mov $idt+IRQ0_INT*8, %edi
    movw $0x0000,  0(%edi)
    movw $IRQ0_TSS,2(%edi)
    movw $0x8500,  4(%edi)
    movw $0x0000,  6(%edi)
+
+sti
 
    // Уффф... Все!..
    // Переключаемся на главную задачу вызывая планировщик
@@ -310,6 +315,9 @@ rp_sidt:
 
 startfilename:
    .ascii "start\0"
+
+startarg:
+   .ascii "arg\0"
 
 
 woow_msg:

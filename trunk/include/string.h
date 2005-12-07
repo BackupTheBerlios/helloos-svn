@@ -24,6 +24,7 @@ void *memset(void *s, int c, size_t n);
 int strcmp(char *a, char *b);
 int strncmp(char *a, char *b, uint n);
 int strlen(char *s);
+char *strchr(char *s, int c);
 
 
 

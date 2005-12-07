@@ -14,11 +14,12 @@
 
 
 #include <helloos/types.h>
+#include <stdio.h>
 
 
 // Содержимое каталога составлено их таких
 // структур.
-struct _DirEntry
+typedef struct
 {
    uchar    Name[11];      // 11
    uchar    Attr;          // 1
@@ -32,8 +33,7 @@ struct _DirEntry
    ushort   WrtDate;       // 2
    ushort   FstClusLO;     // 2
    ulong    FileSize;      // 4
-} __attribute__((packed));
-typedef struct _DirEntry DirEntry;
+} __attribute__((packed)) DirEntry;
 
 
 // Атрибуты файлов и каталогов
@@ -114,5 +114,11 @@ ulong FindEntry(ulong DirCluster, char *Name83, DirEntry *EntryBuf);
 
 // Читает в буфер часть файла, len байт, начиная с байта номер start
 void LoadPart(DirEntry *Entry, void *Buf, uint start, uint len);
+
+
+uint syscall_find_file(uint dir, char *name83, DirEntry *fileentry);
+uint syscall_file_load(DirEntry *Entry, byte *Buf, FileChunk *chunk);
+uint syscall_dir_load(uint dir, DirEntry *Buf, uint size);
+
 
 #endif // __FAT_H

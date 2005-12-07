@@ -4,6 +4,39 @@
 
   $Id$
 
+  HelloOS ChangeLog
+
+
+CHANGES IN 0.0j:
+
+   * System page tables now handled via binfmt.c's function add_sys_pageref()
+
+   * User programs now can use standard C functions by linking with lib/stdio.o
+      and lib/string.o.
+
+   * a.out support has been removed
+
+   * Syscalls are fully changed
+
+   * User processes can use `common variables' to communicate. These can be used
+      as semaphores. Implemented in ipc.c.
+
+   * Wait functions added: wait_pid, wait_comvar. So process now have a `state':
+      running or waiting.
+
+   * Command line parameters now supported. Argc always equals to 1 and whole
+      parameters are sent via argv[0].
+
+   * Console command changed: `exe <filename> [<cmdarg>]' - run binary,
+      `bg <filename> [<cmdarg>]' - run binary in background, `help' - write list
+      of console commands
+
+   * Syscalls for file-handling
+
+   * New demo programs: ls, cat, xo
+
+   * In several places panics were changed to killing current process
+
 
 
 CHANGES IN 0.0i:

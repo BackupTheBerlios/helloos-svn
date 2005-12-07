@@ -22,7 +22,6 @@
 #include <string.h>
 #include <helloos/scrio.h>
 #include <helloos/io.h>
-#include <helloos/panic.h>
 #include <helloos/scheduler.h>
 
 // Количество распределяемых страниц
@@ -59,7 +58,8 @@ addr_t alloc_first_page()
    res = PAGES_NR - res;
    if (res == PAGES_NR)
    {
-      panic("Cannot allocate first page! Out of memory?!");
+      printf_color(0x0c, "Cannot allocate first page! Out of memory?!");
+      scheduler_kill_current();
       return 0;
    }
    page_map[res] = 1;
@@ -73,9 +73,15 @@ addr_t alloc_first_page()
 void free_page(addr_t ptr)
 {
    if ((ptr>>12) < PAGE_START)
-      return panic("Woow!... Trying to free low-mem!\n");
+   {
+      printf_color(0x0c, "Woow!... Trying to free low-mem!\n");
+      return scheduler_kill_current();
+   }
    if (! page_map[(ptr>>12) - PAGE_START])
-      return panic("Trying to free free page!");
+   {
+      printf_color(0x0c, "Trying to free free page!");
+      return scheduler_kill_current();
+   }
    page_map[(ptr>>12) - PAGE_START] = 0;
 }
 

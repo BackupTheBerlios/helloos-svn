@@ -13,10 +13,12 @@
 
 #include <helloos/types.h>
 #include <helloos/scrio.h>
-#include <helloos/panic.h>
 #include <helloos/scheduler.h>
 #include <helloos/binfmt.h>
 #include <helloos/io.h>
+#include <helloos/syscall.h>
+#include <helloos/ipc.h>
+#include <helloos/fat.h>
 
 
 // Указатель на syscall
@@ -25,101 +27,77 @@ typedef uint (*syscall_ptr)();
 // Несложно заметить, что все вызовы сделаны только в отладочных
 // целях и их потом, разумеется заменим на нормальные и защищенные
 
-uint sys_exit(uint exitcode);
+uint syscall_exit(uint exitcode);
 
-uint sys_getnewcharaddr();
-uint sys_incvideochar(uint addr);
-uint sys_nputs_color(char *s, uint n, uchar attr);
+uint syscall_getpid();
 
-uint sys_clear_screen();
-uint sys_readline(char *cmd, uint buf_size);
+char syscall_getchar(uint x, uint y);
+uint syscall_setchar(uint x, uint y, char c);
+uint syscall_setattr(uint x, uint y, byte a);
 
-uint sys_panic(char *msg);
+char syscall_getch();
 
-uint sys_ps();
-uint sys_kill(uint pid);
-uint sys_pages(uint pid);
+uint syscall_nputs_color(char *s, uint n, uchar attr);
 
-uint sys_bin_info(char *filename);
-uint sys_bin_load(char *filename);
+uint syscall_clear_screen();
+uint syscall_readline(char *cmd, uint buf_size);
 
-uint sys_dbg();
+uint syscall_ps();
+uint syscall_kill(uint pid);
+uint syscall_pages_info(uint pid);
+
+uint syscall_bin_info(char *filename);
+uint syscall_bin_load(char *filename, char *arg);
+
+uint syscall_dbg();
+
+uint syscall_screen_info(uint *w, uint *h);
+
+uint syscall_waitpid(uint pid);
 
 // Таблица системных вызовов
 syscall_ptr syscall_table[] = {
-   (syscall_ptr)sys_exit,
-   (syscall_ptr)sys_getnewcharaddr,
-   (syscall_ptr)sys_incvideochar,
-   (syscall_ptr)sys_nputs_color,
-   (syscall_ptr)sys_clear_screen,
-   (syscall_ptr)sys_readline,
-   (syscall_ptr)sys_panic,
-   (syscall_ptr)sys_ps,
-   (syscall_ptr)sys_kill,
-   (syscall_ptr)sys_bin_info,
-   (syscall_ptr)sys_bin_load,
-   (syscall_ptr)sys_pages,
-   (syscall_ptr)sys_dbg,
+   (syscall_ptr)syscall_exit,
+   (syscall_ptr)syscall_getpid,
+
+   (syscall_ptr)syscall_getchar,
+   (syscall_ptr)syscall_setchar,
+   (syscall_ptr)syscall_setattr,
+   (syscall_ptr)syscall_getch,
+   (syscall_ptr)syscall_nputs_color,
+   (syscall_ptr)syscall_clear_screen,
+   (syscall_ptr)syscall_readline,
+
+   (syscall_ptr)syscall_ps,
+   (syscall_ptr)syscall_kill,
+   (syscall_ptr)syscall_bin_info,
+   (syscall_ptr)syscall_bin_load,
+   (syscall_ptr)syscall_pages_info,
+   (syscall_ptr)syscall_dbg,
+
+   (syscall_ptr)syscall_screen_info,
+
+   (syscall_ptr)syscall_comvar_init,
+   (syscall_ptr)syscall_comvar_get,
+   (syscall_ptr)syscall_comvar_set,
+   (syscall_ptr)syscall_comvar_add,
+   (syscall_ptr)syscall_waitcomvar,
+   (syscall_ptr)syscall_ipc_info,
+
+   (syscall_ptr)syscall_waitpid,
+
+   (syscall_ptr)syscall_find_file,
+   (syscall_ptr)syscall_file_load,
+   (syscall_ptr)syscall_dir_load,
 };
 // Вычисляемое количество вызовов. Сделано в виде переменной,
 // чтобы было возможно обращение из ассемблера.
 uint syscall_nr = (sizeof(syscall_table) / sizeof(syscall_ptr));
 
 
-// Во время системного вызова все сегментные регистры кроме GS
-// переключаются на сегменты ядра. Эта функция копирует строку
-// из пользовательской памяти в системную через GS.
-//
-// FIXME: я забыл про ограничение строки нулем. Переделывать
-// лень - для демонстрации и так пойдет
-inline void strncpy_from_user(void *dest, void *src, uint n)
-{
-   __asm__(
-         "push %%ds\n"
-         "push %%gs\n"
-         "pop %%ds\n"
-         "movl %0, %%edi\n"
-         "movl %1, %%esi\n"
-         "cld\n"
-         "rep movsb\n"
-         "pop %%ds\n"
-         ::"m"(dest), "m"(src), "c"(n):"di", "si");
-}
-
-
-inline void memcpy_from_user(void *dest, void *src, uint n)
-{
-   __asm__(
-         "push %%ds\n"
-         "push %%gs\n"
-         "pop %%ds\n"
-         "movl %0, %%edi\n"
-         "movl %1, %%esi\n"
-         "cld\n"
-         "rep movsb\n"
-         "pop %%ds\n"
-         ::"m"(dest), "m"(src), "c"(n):"di", "si");
-}
-
-
-inline void memcpy_to_user(void *dest, void *src, uint n)
-{
-   __asm__(
-         "push %%es\n"
-         "push %%gs\n"
-         "pop %%es\n"
-         "movl %0, %%edi\n"
-         "movl %1, %%esi\n"
-         "cld\n"
-         "rep movsb\n"
-         "pop %%es\n"
-         ::"m"(dest), "m"(src), "c"(n):"di", "si");
-}
-
-
-// Системный вызов sys_exit
+// Системный вызов syscall_exit
 // Его вызывает пользовательский процесс когда завершается
-uint sys_exit(uint exitcode)
+uint syscall_exit(uint exitcode)
 {
    printf_color(0x04, "Process %d exits with code %d\n", Task[Current]->pid, exitcode);
    scheduler_kill_current();
@@ -128,11 +106,19 @@ uint sys_exit(uint exitcode)
 }
 
 
+// Системный вызов getpid
+// Возвращает pid текущеко процесса
+uint syscall_getpid()
+{
+   return Task[Current]->pid;
+}
 
-// Системный вызов sys_getnewcharaddr
+
+
+// Системный вызов syscall_getnewcharaddr
 // Выделяет процессу один символ в видеопамяти и возвращает
 // его адрес
-uint sys_getnewcharaddr()
+uint syscall_getnewcharaddr()
 {
    static uint addr = 0xf06; // Выделяем начиная отсюда
    uint res = addr;
@@ -140,23 +126,23 @@ uint sys_getnewcharaddr()
    return res;
 }
 
-// Системный вызов sys_incvideochar
+// Системный вызов syscall_incvideochar
 // Увеличивает на 1 значения байта в видеопамяти
 // Возвращает 0
-uint sys_incvideochar(uint addr)
+uint syscall_incvideochar(uint addr)
 {
    (*(uchar*)(0xb8000+addr))++;
    return 0;
 }
 
-// Системный вызов sys_nputs_color
+// Системный вызов syscall_nputs_color
 // Предоставляет процессам функцию nputs_color
 // Параметры те же, что и обычно. Строка не длиннее 255 символов.
 // Возвращает количество выведенных символов.
 //
 // FIXME: Нужно проверять наличие доступа к пользовательской
 // памяти. Предупреждать GP, PF (в смысле выхода за выделенную память.
-uint sys_nputs_color(char *s, uint n, uchar attr)
+uint syscall_nputs_color(char *s, uint n, uchar attr)
 {
    uchar localbuf[256];
    memcpy_from_user(localbuf, s, MIN(n, 256));
@@ -165,14 +151,29 @@ uint sys_nputs_color(char *s, uint n, uchar attr)
 }
 
 
+// Системный вызов syscall_getch
+// Ожидает нажатия клавиши и возвращает ее ascii-код
+char syscall_getch()
+{
+   uchar cp, c = inb(0x60);
+   char ascii;
+   do
+   {
+      cp = c;
+      c = inb(0x60);
+   } while ((c == '\0') || (c == cp) || ((ascii = scan2ascii(c)) == '\0'));
+   return scan2ascii(c);
+}
 
-uint sys_clear_screen()
+
+
+uint syscall_clear_screen()
 {
    clear_screen();
    return 0;
 }
 
-uint sys_readline(char *cmd, uint buf_size)
+uint syscall_readline(char *cmd, uint buf_size)
 {
    char localbuf[256];
    readline(localbuf, 256);
@@ -181,27 +182,19 @@ uint sys_readline(char *cmd, uint buf_size)
    return 0;
 }
 
-uint sys_panic(char *msg)
-{
-   char localbuf[256];
-   strncpy_from_user(localbuf, msg, 256);
-   panic(localbuf);
-   return 0;
-}
-
-uint sys_ps()
+uint syscall_ps()
 {
    scheduler_ps();
    return 0;
 }
 
-uint sys_kill(uint pid)
+uint syscall_kill(uint pid)
 {
    scheduler_kill(pid);
    return 0;
 }
 
-uint sys_bin_info(char *filename)
+uint syscall_bin_info(char *filename)
 {
    char localbuf[256];
    strncpy_from_user(localbuf, filename, 256);
@@ -210,24 +203,42 @@ uint sys_bin_info(char *filename)
    return 0;
 }
 
-uint sys_bin_load(char *filename)
+uint syscall_bin_load(char *filename, char *arg)
 {
    char localbuf[256];
+   char locarg[256];
    strncpy_from_user(localbuf, filename, 256);
-   if (!bin_load_bin(localbuf))
-      printf("Cannot load binary\n");
-   return 0;
+   strncpy_from_user(locarg,   arg,      256);
+   uint pid = bin_load_bin(localbuf, locarg);
+   if (pid == (uint)-1)
+      printf_color(0x04, "Cannot load binary\n");
+   return pid;
 }
 
-uint sys_pages(uint pid)
+uint syscall_pages_info(uint pid)
 {
    scheduler_pages(pid);
    return 0;
 }
 
-uint sys_dbg()
+uint syscall_dbg()
 {
    outw(0x8A00, 0x8A00);
    outw(0x8AE0, 0x8A00);
    return 0;
+}
+
+uint syscall_waitpid(uint pid)
+{
+   uint p;
+   for (p = 0; p < NTasks; p++)
+      if (Task[p]->pid == pid)
+         goto ok;
+   return 0;
+
+ok:
+   Task[Current]->waitfor.pid = pid;
+   Task[Current]->state = PS_WAITPID;
+   CALL_SCHEDULER;
+   return 1;
 }

@@ -4,8 +4,6 @@
  *
  *  $Id$
  *
- *  На текущей стадии это основной файл ядра системы
- *
  *  Реализован примитивный терминал со встроенной
  *  мини-консолью, понимающей набор отладочных команд.
  *
@@ -20,264 +18,9 @@
 #include <helloos/fat.h>
 
 #include <stdarg.h>
+#include <stdio.h>
 
 #include <helloos/user_syscalls.h>
-
-// Реализация стандартного snprintf
-// Сейчас поддерживаются форматы: c, d, p, s, u, x
-// Ширина поля и точность НЕ поддерживаются
-int _vsnprintf(char *str, size_t maxlen, const char *format, va_list curp)
-{
-   /*Проверка на конец буффера*/
-#define ifend {if(strpos>=(maxlen-1)){str[maxlen-1]='\0';return strpos;}}
-
-   char c;              // тут,
-   char *pc;            // я
-   //double d;            // думаю,
-   int i, i1;               // всё
-   unsigned int ui, ui1;        // понятно
-   
-   int num;          // понадобятся для подсчёта
-   unsigned int fl;        // количества цифр в числе
-   int j;               // счётчик. юзается часто.
-   int hexnum[]={'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'};
-   
-   unsigned int count=0;            // текущая позиция чтения в format
-   unsigned int strpos=0;           // текущая позиция записи в str  и одновременно количество уже записанных символов
-   
-//   va_list curp;           // читай Кернигана
-//   va_start(curp,format);        // инициализируем
-   
-
-   /* Цикл пошёл */
-   while(format[count]!='\0' && strpos<(maxlen-1))
-   {
-/************************************************************************/
-/**/     if(format[count]!='%')
-      {
-         ifend;
-         str[strpos]=format[count];    // иначе пишем символ и
-         count++;          // увеличиваем
-         strpos++;            // счётчики
-         continue;
-      }
-      switch(format[count+1])
-      {
-/************************************************************************/
-/**/        case '%':
-            ifend;
-            str[strpos]='%';        // пишем '%'
-            count+=2;            // прыгаем на следующий за ним символ
-            strpos++;            // увеличиваем на 1 позицию записи
-            break;
-/************************************************************************/
-/**/        case 'c':
-            ifend;
-            c=va_arg(curp, char);         // читаем его
-            str[strpos]=c;          // пишем
-            strpos++;            // увеличиваем на 1 позицию записи
-            count+=2;            // прыгаем на следующий за ним символ
-            break;
-/************************************************************************/
-/**/        case 'd':
-            ifend;
-            i=va_arg(curp, int);
-            if(i<0)
-            {
-               str[strpos]='-';
-               strpos++;
-               i=-i;
-            }
-            num=1;
-            fl=1;
-//            while(i>=(fl*=10)) num++;     // считаем количество цифр
-//            fl/=10;              // в переменной fl 10 в степени num
-
-            i1 = i;
-            while (i1/10)
-            { i1/=10; fl*=10; num++; }
-
-            j=1;
-            /*пока есть куда писать и что писать*/
-            while(strpos<=(maxlen-2) && j<=num) 
-            {
-               str[strpos]=(i/fl)+'0';    // переводим int в char и пишем в str
-               i%=fl;            // избавляемся от считанной цифры
-               fl/=10;           // понижаем степень 10
-               j++;
-               strpos++;
-            }
-            count+=2;
-            break;
-/************************************************************************/
-/*       case 'f':
-            ifend;
-            d=va_arg(curp, double);
-*/
-/************************************************************************/
-         case 'p':
-            ifend;
-            ui=va_arg(curp, unsigned int);
-            j=28;
-            while(strpos<=(maxlen-2) && j>=0)            // не 0 :(
-            {
-               str[strpos]=hexnum[(ui>>j)&0xf];
-               strpos++;
-               j-=4;
-            }
-            count+=2;
-            break;
-/************************************************************************/
-/**/        case 's':
-            ifend;
-            pc=va_arg(curp, char *);
-            j=0;
-            /*копируем pc[] в str[]*/
-            while(strpos<=(maxlen-2) && pc[j]!=0)
-            {
-               str[strpos]=pc[j];
-               strpos++;
-               j++;
-            }
-            count+=2;
-            break;
-/************************************************************************/
-/**/        case 'u':
-            ifend;
-            ui=va_arg(curp, unsigned int);
-            num=1;
-            fl=1;
-//            while(ui>=(fl*=10)) num++;    
-//            fl/=10;              
-
-            ui1 = ui;
-            while (ui1/10)                // считаем количество цифр
-            { ui1/=10; fl*=10; num++; }   // в переменной fl 10 в степени num-1
-
-            j=1;
-            /*пока есть куда писать и что писать*/
-            while(strpos<=(maxlen-2) && j<=num) 
-            {
-               str[strpos]=(ui/fl)+'0';   // переводим int в char и пишем в str
-               ui%=fl;           // избавляемся от считанной цифры
-               fl/=10;           // понижаем степень 10
-               j++;
-               strpos++;
-            }
-            count+=2;
-            break;
-/************************************************************************/
-/**/        case 'x':
-            ifend;
-            ui=va_arg(curp, unsigned int);
-            if(ui==0)
-            {
-               str[strpos]='0';        // если 0, то просто пишем его
-               count+=2;
-               strpos++;
-               break;
-            }
-            else
-            {
-               j=28;
-               while(strpos<=(maxlen-2) && j>=0)   // не 0 :(
-               {
-                  if((ui>>j))      // цифру делаем младшей и отделяем её
-                  {
-                     str[strpos]=hexnum[(ui>>j)&0xf];
-                     strpos++;
-                  }
-                  j-=4;
-               }
-               count+=2;
-               break;
-            }
-/************************************************************************/
-         default:
-            break;
-      }
-   }
-   ifend;
-   str[strpos]='\0';
-   return strpos;
-}
-
-int _snprintf(char *str, size_t maxlen, const char *format, ...)
-{
-   va_list curp;
-   uint res;
-   va_start(curp, format);
-   res = _vsnprintf(str, maxlen, format, curp);
-   va_end(curp);
-   return res;
-}
-
-// Тупая реализация стандартного vprintf с поддержкой цвета
-// Используется vsnprintf, а затем puts
-// Может выводить НЕ БОЛЕЕ 256(-1) символов
-// Цвет просто передается в puts_color
-int _vprintf_color(uchar attr, char *format, va_list curp)
-{
-   char Buffer[256];
-   uint res = _vsnprintf(Buffer, 256, format, curp);
-   mysys_nputs_color(Buffer, 256, attr);
-   return res;
-}
-
-// Реализация стандартного vprintf через vprintf_color
-int _vprintf(char *format, va_list curp)
-{
-   return _vprintf_color(0x0e, format, curp);
-}
-
-// Цветной printf через vprintf_color
-int _printf_color(uchar attr, char *format, ...)
-{
-   va_list curp;
-   uint res;
-   va_start(curp, format);
-   res = _vprintf_color(attr, format, curp);
-   va_end(curp);
-   return res;
-}
-
-// Реализация стандартного printf через vprintf_color
-int _printf(char *format, ...)
-{
-   va_list curp;
-   uint res;
-   va_start(curp, format);
-   res = _vprintf_color(0x0e, format, curp);
-   va_end(curp);
-   return res;
-}
-
-
-
-// Вывод с цветом без ограничения длины
-void _puts_color(const char *s, uchar attr)
-{
-   mysys_nputs_color(s, -1, attr);
-}
-
-
-// Вывод без цвета без длины
-void _puts(const char *s)
-{
-   mysys_nputs_color(s, -1, 0x0e);
-}
-
-
-// Вывод без цвета, с ограничением длины
-void _nputs(const char *s, uint n)
-{
-   mysys_nputs_color(s, n, 0x0e);
-}
-
-
-
-
-
 
 
 
@@ -297,172 +40,368 @@ __asm__(
 }
 
 
+// Функция консольной команды
+typedef void (*cmdfunc)(char *arg1, char *arg2);
 
-void command(char *cmd)
+// Структура описывает одну команду
+typedef struct
 {
-   if (strcmp(cmd, "clear") == 0)   // Очистить экран
-   {
-      mysys_clear_screen();
-      return;
-   }
-   if (strcmp(cmd, "panic") == 0)   // Напугать ядро
-   {
-      mysys_panic("As you wish!");
-      return;
-   }
-   if (strcmp(cmd, "reboot") == 0)  // Перезагрузиться
-   {
-      // Я пока не нашел в документации почему это приводит к перезагрузке
-      // На самом деле даже одна любая из этих команд вызывает перезагрузку
-      outb(0xfe, 0x64);
-      outb(0x01, 0x92);
-   }
-   if (strcmp(cmd, "fat") == 0)     // Запустить FAT-браузер
-   {
-//      fat_main();
-      return;
-   }
-   if (strcmp(cmd, "dbg") == 0)     // Вызвать отладчик Bochs
-   {
-      outw(0x8A00, 0x8A00);
-      outw(0x8AE0, 0x8A00);
-      return;
-   }
-   if (strcmp(cmd, "cli") == 0)     // Отключить прерывания, остановить процессы
-   {
-      __asm__("cli");
-      return;
-   }
-   if (strcmp(cmd, "sti") == 0)     // Включить прерывания
-   {
-      __asm__("sti");
-      return;
-   }
-   if (strcmp(cmd, "beep") == 0)    // Наступить на хвост
-   {
-      make_sound();
-      return;
-   }
-   if (strcmp(cmd, "cpu") == 0)     // Определить процессор
-   {
-      // Идентификация процессора (см. [1])
+   char *name;
+   char *tmpl;
+   char *help;
+   cmdfunc func;
+} Command;
 
-      ulong eax, ebx, ecx, edx;
-      ulong maxeax, maxexeax; // Макс. индексы для Basic и Extended CPUID информации
-      ulong vendor[3]; // Имя производителя
-      __asm__ volatile("movl $0x0, %%eax\n"
-              "cpuid"
-              :"=a"(maxeax), "=b"(vendor[0]), "=c"(vendor[2]), "=d"(vendor[1]):);
-      __asm__ volatile ("movl $0x80000000, %%eax\n"
-              "cpuid"
-              :"=a"(maxexeax):);
-      _printf("Maximum CPUID indexes: %p/%p", (char*)maxeax, (char*)maxexeax);
 
-      _puts("\nVendor: "); _nputs((char*)&vendor, 12);
+void help   (char*, char*);
+void clear  (char*, char*);
+//void reboot (char*, char*);
+void beep   (char*, char*);
+void cpu    (char*, char*);
+void ps     (char*, char*);
+void kill   (char*, char*);
+void info   (char*, char*);
+void exe    (char*, char*);
+void bg     (char*, char*);
+void pages  (char*, char*);
+void ipc    (char*, char*);
+void gp     (char*, char*);
+void cl     (char*, char*);
 
-      _puts("\nBrand String: ");
+// Список команд
+Command commands[] = 
+{
+   {
+      .name = "help",
+      .tmpl = "help",
+      .help = "You're here",
+      .func = help,
+   },
+   {
+      .name = "clear",
+      .tmpl = "clear",
+      .help = "Wipe screen",
+      .func = clear,
+   },
+//   {
+//      .name = "reboot",
+//      .tmpl = "reboot",
+//      .help = "Escape",
+//      .func = reboot,
+//   },
+   {
+      .name = "beep",
+      .tmpl = "beep",
+      .help = "Make beeeeep with pc-speaker",
+      .func = beep,
+   },
+   {
+      .name = "cpu",
+      .tmpl = "cpu",
+      .help = "Identify the CPU with cpuid instruction",
+      .func = cpu,
+   },
+   {
+      .name = "ps",
+      .tmpl = "ps",
+      .help = "List all processes in system",
+      .func = ps,
+   },
+   {
+      .name = "kill",
+      .tmpl = "kill <pid>",
+      .help = "Kill specified process",
+      .func = kill,
+   },
+   {
+      .name = "info",
+      .tmpl = "info <bin>",
+      .help = "Print headers of specified ELF-file",
+      .func = info,
+   },
+   {
+      .name = "exe",
+      .tmpl = "exe <bin> [arg]",
+      .help = "Run specified ELF-file with 'arg' as argv[0]",
+      .func = exe,
+   },
+   {
+      .name = "bg",
+      .tmpl = "bg <bin> [arg]",
+      .help = "Some as 'exe' but run in background",
+      .func = bg,
+   },
+   {
+      .name = "pages",
+      .tmpl = "pages <pid>",
+      .help = "Write memory usage for specified process",
+      .func = pages,
+   },
+   {
+      .name = "ipc",
+      .tmpl = "ipc",
+      .help = "List common variables",
+      .func = ipc,
+   },
+   {
+      .name = "gp",
+      .tmpl = "gp",
+      .help = "Do bad thing and cause the General Protection Fault",
+      .func = gp,
+   },
+   {
+      .name = "cl",
+      .tmpl = "cl",
+      .help = "Character color test",
+      .func = cl,
+   },
+};
+// Вычисляем количество команд
+#define NCmd   ((int)(sizeof(commands) / sizeof(Command)))
 
-      if ((maxexeax & 0x80000000) && maxexeax >= 0x80000004) // Если процессор поддерживает Brand String
+
+// Вызывается чтобы gcc не вопил про unused parameters
+#define MAKE_COMPILER_HAPPY      { arg1 = arg1; arg2 = arg2; }
+
+char zero = '\0';
+
+// Парсим строку, извлекая из нее имя команды и два аргумента
+// Аргументы разделяются пробелами. Если в строке больше двух
+// аргументов, то все после второго пробела пойдет как второй
+// аргумент. Двойные пробелы не работают.
+void do_cmd(char *cmd)
+{
+   if (! *cmd)
+      return;
+
+   char *arg1, *arg2 = 0;
+   arg1 = strchr(cmd, ' ');
+   if (arg1)
+   {
+      *arg1 = '\0';
+      arg1++;
+      arg2 = strchr(arg1, ' ');
+      if (arg2)
       {
-         ulong BrandString[12];
-         __asm__ volatile ("movl $0x80000002, %%eax\n"
-               "cpuid"
-               :"=a"(BrandString[0]), "=b"(BrandString[1]), "=c"(BrandString[2]), "=d"(BrandString[3]):);
-         __asm__ volatile ("movl $0x80000003, %%eax\n"
-               "cpuid"
-               :"=a"(BrandString[4]), "=b"(BrandString[5]), "=c"(BrandString[6]), "=d"(BrandString[7]):);
-         __asm__ volatile ("movl $0x80000004, %%eax\n"
-               "cpuid"
-               :"=a"(BrandString[8]), "=b"(BrandString[9]), "=c"(BrandString[10]), "=d"(BrandString[11]):);
-         _puts((char*)&BrandString);
+         *arg2 = '\0';
+         arg2++;
       }
-      else
-         _puts("Not Supported");
+   }
 
-      __asm__ volatile ("movl $0x1, %%eax\n"
-              "cpuid"
-              :"=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx):);
-      // Информация о модели процессора
-      _printf("\nFamily   : %d", (eax >> 8) & 0x0f);
-      _printf("\nModel    : %d", (eax >> 4) & 0x0f);
-      _printf("\nStepping : %d", eax & 0x0f);
-      _printf("\nProcessor Type: %d", (eax >> 12) & 0x03);
-      switch ((eax >> 12) & 0x03)
-      {
-         case 0: _puts(" (Original OEM)"); break;
-         case 1: _puts(" (Intel OverDrive(r))"); break;
-         case 2: _puts(" (Dual processor)"); break;
-         case 3: _puts(" (reserved?)"); break;
-      }
+   // Меняем нулевые указатели на указатели на пустую строку,
+   // чтобы функции команд не пытались стучатся по нулевому
+   // адресу
+   if (! arg1) arg1 = &zero;
+   if (! arg2) arg2 = &zero;
 
-      // Наличие некоторых нам интересных фич
-      _puts("\nOn-Chip FPU: ");
-      if (!(edx & 0x1)) _puts("NO"); else _puts("YES");
-      _puts("\nDebugging Extensions: ");
-      if (!(edx & 0x8)) _puts("NO"); else _puts("YES");
-      _puts("\nPage Size Extensions: ");
-      if (!(edx & 0x10)) _puts("NO"); else _puts("YES");
-      _puts("\nOn-Chip APIC: ");
-      if (!(edx & 0x200)) _puts("NO"); else _puts("YES");
-      _puts("\nMMX : ");
-      if (!(edx & 0x800000)) _puts("NO"); else _puts("YES");
-      _puts("\nSSE : ");
-      if (!(edx & 0x2000000)) _puts("NO"); else _puts("YES");
-      _puts("\nSSE2: ");
-      if (!(edx & 0x4000000)) _puts("NO"); else _puts("YES");
-      return;
-   }
-   if (strcmp(cmd, "ps") == 0)      // Показать всех
+   // Ищем нашу команду
+   int i;
+   for (i = 0; i < NCmd; i++)
    {
-      mysys_ps();
-      return;
-   }
-   if (strncmp(cmd, "kill", 4) == 0)   // Убить процесс. pid задан параметром
-   {
-      uint i = 5, pid = 0, len = strlen(cmd);
-      while (i < len)
+      if (strcmp(cmd, commands[i].name) == 0)
       {
-         pid *= 10;
-         pid += cmd[i++] - '0';
+         commands[i].func(arg1, arg2);
+         return;
       }
-      _printf("%d\n", pid);
-      mysys_kill(pid);
-      return;
    }
-   if (strncmp(cmd, "info", 4) == 0)   // Прочитать a.out-заголовки у файла, заданного параметром
+   printf("Unknown command '%s'\n", cmd);
+}
+
+
+void help(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+
+   int i;
+   for (i = 0; i < NCmd; i++)
+      printf("%s\t<- %s\n", commands[i].tmpl, commands[i].help);
+}
+
+
+void clear(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+   sys_clear_screen();
+}
+
+//void reboot(char *arg1, char *arg2)
+//{
+//   MAKE_COMPILER_HAPPY;
+//
+//   // Я пока не нашел в документации почему это приводит к перезагрузке
+//   outb(0xfe, 0x64);
+//   outb(0x01, 0x92);
+//}
+
+void beep(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+
+   make_sound();
+   return;
+}
+
+void cpu(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+
+   // Идентификация процессора (см. [1])
+
+   ulong eax, ebx, ecx, edx;
+   ulong maxeax, maxexeax; // Макс. индексы для Basic и Extended CPUID информации
+   ulong vendor[3]; // Имя производителя
+   __asm__ volatile("movl $0x0, %%eax\n"
+         "cpuid"
+         :"=a"(maxeax), "=b"(vendor[0]), "=c"(vendor[2]), "=d"(vendor[1]):);
+   __asm__ volatile ("movl $0x80000000, %%eax\n"
+         "cpuid"
+         :"=a"(maxexeax):);
+   printf("Maximum CPUID indexes: %p/%p", (char*)maxeax, (char*)maxexeax);
+
+   puts("\nVendor: "); nputs((char*)&vendor, 12);
+
+   puts("\nBrand String: ");
+
+   if ((maxexeax & 0x80000000) && maxexeax >= 0x80000004) // Если процессор поддерживает Brand String
    {
-      mysys_bin_info(&cmd[5]);
-      return;
+      ulong BrandString[12];
+      __asm__ volatile ("movl $0x80000002, %%eax\n"
+            "cpuid"
+            :"=a"(BrandString[0]), "=b"(BrandString[1]), "=c"(BrandString[2]), "=d"(BrandString[3]):);
+      __asm__ volatile ("movl $0x80000003, %%eax\n"
+            "cpuid"
+            :"=a"(BrandString[4]), "=b"(BrandString[5]), "=c"(BrandString[6]), "=d"(BrandString[7]):);
+      __asm__ volatile ("movl $0x80000004, %%eax\n"
+            "cpuid"
+            :"=a"(BrandString[8]), "=b"(BrandString[9]), "=c"(BrandString[10]), "=d"(BrandString[11]):);
+      puts((char*)&BrandString);
    }
-   if (strncmp(cmd, "exe", 3) == 0)    // Запустить a.out-файл, заданный параметром
+   else
+      puts("Not Supported");
+
+   __asm__ volatile ("movl $0x1, %%eax\n"
+         "cpuid"
+         :"=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx):);
+   // Информация о модели процессора
+   printf("\nFamily   : %d", (eax >> 8) & 0x0f);
+   printf("\nModel    : %d", (eax >> 4) & 0x0f);
+   printf("\nStepping : %d", eax & 0x0f);
+   printf("\nProcessor Type: %d", (eax >> 12) & 0x03);
+   switch ((eax >> 12) & 0x03)
    {
-      mysys_bin_load(&cmd[4]);
-      return;
+      case 0: puts(" (Original OEM)"); break;
+      case 1: puts(" (Intel OverDrive(r))"); break;
+      case 2: puts(" (Dual processor)"); break;
+      case 3: puts(" (reserved?)"); break;
    }
-   if (strncmp(cmd, "pages", 5) == 0)  // Сколько занимает в памяти процесс. pid задан параметром
+
+   // Наличие некоторых нам интересных фич
+   puts("\nOn-Chip FPU: ");
+   if (!(edx & 0x1)) puts("NO"); else puts("YES");
+   puts("\nDebugging Extensions: ");
+   if (!(edx & 0x8)) puts("NO"); else puts("YES");
+   puts("\nPage Size Extensions: ");
+   if (!(edx & 0x10)) puts("NO"); else puts("YES");
+   puts("\nOn-Chip APIC: ");
+   if (!(edx & 0x200)) puts("NO"); else puts("YES");
+   puts("\nMMX : ");
+   if (!(edx & 0x800000)) puts("NO"); else puts("YES");
+   puts("\nSSE : ");
+   if (!(edx & 0x2000000)) puts("NO"); else puts("YES");
+   puts("\nSSE2: ");
+   if (!(edx & 0x4000000)) puts("NO"); else puts("YES");
+   return;
+}
+
+void ps(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+
+   sys_ps();
+   return;
+}
+
+void kill(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+
+   uint pid = 0;
+   while (*arg1)
    {
-      uint i = 6, pid = 0, len = strlen(cmd);
-      while (i < len)
-      {
-         pid *= 10;
-         pid += cmd[i++] - '0';
-      }
-      mysys_pages(pid);
-      return;
+      pid *= 10;
+      pid += *arg1 - 0x30;
+      *arg1++;
    }
-   if (strcmp(cmd, "gp") == 0)
+   sys_kill(pid);
+   return;
+}
+
+void info(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+
+   sys_bin_info(arg1);
+   return;
+}
+
+void exe(char *arg1, char *arg2)
+{
+   uint pid = sys_bin_load(arg1, arg2);
+   printf_color(0x06, "pid=%d\n", pid);
+   sys_waitpid(pid);
+   return;
+}
+
+void bg(char *arg1, char *arg2)
+{
+   uint pid = sys_bin_load(arg1, arg2);
+   printf_color(0x06, "pid=%d\n", pid);
+   return;
+}
+
+void pages(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+
+   uint pid = 0;
+   while (*arg1)
    {
-      *(uchar*)(0xc0000000) = 5;
-      return;
+      pid *= 10;
+      pid += *arg1 - 0x30;
+      *arg1++;
    }
-   if (strcmp(cmd, "cl") == 0)
+   sys_pages_info(pid);
+   return;
+}
+
+void ipc(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+
+   sys_ipc_info();
+   return;
+}
+
+void gp(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+
+   *(uchar*)(0x80001234) = 5;
+   return;
+}
+
+void cl(char *arg1, char *arg2)
+{
+   MAKE_COMPILER_HAPPY;
+
+   int i, j;
+   for (j = 0; j < 16; j++)
    {
-      int i;
       for (i = 0; i < 16; i++)
-         _puts_color("X", i);
-      return;
+         puts_color("X", j*16+i);
+      puts("\n");
    }
-   _puts("Unknown command\n");
+   return;
 }
 
 
@@ -477,19 +416,19 @@ int main()
 //              *(uchar*)(0x8001+0x90000));
 
    // Выводим всякую ерунду
-   _printf(FLGREEN"\nHelloOS "FYELLOW"v%d.%d%c"RST" by "FLMAGENTA"Denis Zgursky "
-           RST"and "FLCYAN"Ilya Skriblovsky\n",
+   printf(FLGREEN"\nHelloOS "FYELLOW"v%d.%d%s"RST" by "FLCYAN"Ilya Skriblovsky "
+           RST"and "FLMAGENTA"Denis Zgursky\n",
            VER_MAJOR, VER_MINOR, VER_ALPHA);
 
 
-   _puts("\nHello World!"); // Куда же без этого?!
+   puts("\nHello World!"); // Куда же без этого?!
 
 
    // Имитируем консоль
    while (1)
    {
-      _puts("\n>>");
-      mysys_readline(cmd, 100);
-      command(cmd);
+      puts("\n>>");
+      sys_readline(cmd, 100);
+      do_cmd(cmd);
    }
 }

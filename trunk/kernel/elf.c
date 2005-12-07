@@ -256,7 +256,7 @@ void elf_info(char *Name)
    for (i = 0; i < Header.e_shnum; i++)
    {
       printf("\tSection %d:", i);
-      printf(" Name = ", Section[i].sh_name);
+      printf(" Name = ");//, Section[i].sh_name);
       print_sectionname(&Section[Header.e_shstrndx], &Section[i], &Entry);
       printf(" Type = %s", parse_sectiontype(Section[i].sh_type));
       printf(" Addr = 0x%x", Section[i].sh_addr);
@@ -294,14 +294,15 @@ extern void user_exit_code();
 
 // FIXME: это количество страниц, выделяемых на стек процесса.
 // Нужно как-то лучше придумать.
-#define USER_STACK_PAGES   1
+#define USER_STACK_PAGES   2
 
 // Создает процесс для ELF-файла
 // (см. комментарии в binfmt.c)
-void elf_load(char *Name)
+// Возвращает PID или (uint)-1
+uint elf_load(char *Name, char *arg)
 {
    if (! elf_is(Name))
-      return;
+      return -1;
 
    char name83[11];
    DirEntry Entry;
@@ -311,7 +312,7 @@ void elf_load(char *Name)
    if (FindEntry(0, name83, &Entry) == (uint)-1)
    {
       printf("Cannot open file '%s'!\n", Name);
-      return;
+      return -1;
    }
 
    // Грузим ELF-заголовок
@@ -321,7 +322,7 @@ void elf_load(char *Name)
    if (Header.e_ident[EI_CLASS] != ELFCLASS32 ||
          Header.e_ident[EI_DATA] != ELFDATA2LSB ||
          Header.e_machine != EM_386)
-      return;
+      return -1;
 
 
    // Грузим заголовки сегментов
@@ -335,8 +336,9 @@ void elf_load(char *Name)
    memset(pg_dir, 0, PAGE_SIZE);
 
    // Прописываем системные таблицы страниц, находящиеся по адресам 0x3000 и 0x4000
-   pg_dir[0x200] = 0x3000 + SYS_PAGE_ATTR;
-   pg_dir[0x201] = 0x4000 + SYS_PAGE_ATTR;
+   int i;
+   for (i = 0; i < sys_pagerefs_n; i++)
+      pg_dir[sys_pagerefs[i].index_in_catalog] = sys_pagerefs[i].table_address + SYS_PAGE_ATTR;
 
    // Выделяем память для TaskStruct задачи
    TaskStruct *task = (TaskStruct*)alloc_first_page();
@@ -350,6 +352,7 @@ void elf_load(char *Name)
 
    // Прописываем атрибуты задачи
    task->pid = CurPID++;
+   task->state = PS_RUNNING;
    task->tsss = tssn << 3; // Селектор TSS
    task->BinFormat = BIN_ELF; // Формат бинарника
    memcpy(&task->file, &Entry, sizeof(Entry));           // Сохраням DirEntry файла
@@ -369,13 +372,13 @@ void elf_load(char *Name)
    task->tss.eax = task->tss.ebx =
       task->tss.ecx = task->tss.edx =
       task->tss.esi = task->tss.edi = 0;
-   task->tss.esp = task->tss.ebp = USER_STACK_PAGES * PAGE_SIZE - 4; // 4 байта для адреса возврата
    task->tss.cs = USER_CS;
    task->tss.es = task->tss.ss =
       task->tss.ds = task->tss.fs =
       task->tss.gs = USER_DS;
    task->tss.ldt = 0;
    task->tss.iomap_trace = 0;
+   // esp и ebp устанавливаются ниже
 
    // Чтобы процесс имел возможность нормально завершится, мы должны предоставить ему адрес
    // возврата в стеке. Процесс передаст управление по этому адресу при выходе из main().
@@ -388,7 +391,15 @@ void elf_load(char *Name)
    // Выделим одну стековую страницу для того, чтобы положить в стек адрес возврата
    addr_t stack_page = alloc_first_page();
    map_page(stack_page, task, PAGE_ADDR(USER_STACK_PAGES * PAGE_SIZE - 1), PAGE_ATTR);
-   *(ulong*)(stack_page+0xffc) = exit_page;
+
+   uint arglen = strlen(arg)+1;
+   arglen = (arglen + 3) / 4 * 4; // округляем вверх до четырех
+   memcpy((char*)(stack_page+0x1000-arglen), arg, strlen(arg)+1);
+   *(ulong*)(stack_page+0x1000-arglen-4) = USER_STACK_PAGES*PAGE_SIZE-arglen;
+   *(ulong*)(stack_page+0x1000-arglen-8) = USER_STACK_PAGES*PAGE_SIZE-arglen-4;
+   *(ulong*)(stack_page+0x1000-arglen-12)= 1;
+   *(ulong*)(stack_page+0x1000-arglen-16)=exit_page;
+   task->tss.esp = task->tss.ebp = USER_STACK_PAGES * PAGE_SIZE - arglen-16; // 4 байта для адреса возврата
    map_page((addr_t)&user_exit_code, task, exit_page, PA_USER | PA_P | PA_NONFREE);
 
    // Создаем в GDT дескриптор для TSS
@@ -408,6 +419,8 @@ void elf_load(char *Name)
    // Живи!
    Task[NTasks] = task;
    NTasks++;
+
+   return task->pid;
 }
 
 
@@ -470,7 +483,7 @@ addr_t elf_pf(addr_t address)
       if (address < USER_STACK_PAGES * PAGE_SIZE)
       {
          tmppage = (uchar*)alloc_first_page();
-         printf_color(0x04, "New stack page for ELF: 0x%x\n", address);
+//         printf_color(0x04, "New stack page for ELF: 0x%x\n", address);
          memset(tmppage, 0, PAGE_SIZE);
          ok = 1;
       }
